@@ -33,7 +33,7 @@ import {
   RefreshCw,
   Smartphone,
 } from "lucide-react";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 
 type SortKey =
   | "sentAt"
@@ -78,53 +78,53 @@ function MetricTile({
   );
 }
 
-export function CampaignDashboard() {
-  const [report, setReport] = useState<CampaignReport | null>(null);
+export function CampaignDashboard({
+  initialReport,
+}: {
+  initialReport: CampaignReport;
+}) {
+  const [report, setReport] = useState<CampaignReport>(initialReport);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("conversionValue");
   const [isPending, startTransition] = useTransition();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/campaigns", { cache: "no-store" });
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          throw new Error(body?.error ?? "Failed to load campaign report");
+    startTransition(() => {
+      void (async () => {
+        try {
+          const response = await fetch("/api/campaigns", { cache: "no-store" });
+          if (!response.ok) {
+            const body = (await response.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(body?.error ?? "Failed to load campaign report");
+          }
+          const data = (await response.json()) as CampaignReport;
+          setReport(data);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Something went wrong");
+        } finally {
+          setLoading(false);
         }
-        const data = (await response.json()) as CampaignReport;
-        setReport(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Something went wrong");
-      } finally {
-        setLoading(false);
-      }
+      })();
     });
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const sorted = report
-    ? [...report.campaigns].sort((a, b) => {
-        if (sortKey === "sentAt") {
-          return (
-            (b.sentAt ? Date.parse(b.sentAt) : 0) -
-            (a.sentAt ? Date.parse(a.sentAt) : 0)
-          );
-        }
-        return (b[sortKey] as number) - (a[sortKey] as number);
-      })
-    : [];
+  const sorted = [...report.campaigns].sort((a, b) => {
+    if (sortKey === "sentAt") {
+      return (
+        (b.sentAt ? Date.parse(b.sentAt) : 0) -
+        (a.sentAt ? Date.parse(a.sentAt) : 0)
+      );
+    }
+    return (b[sortKey] as number) - (a[sortKey] as number);
+  });
 
   const best =
-    report && report.campaigns.length > 0
+    report.campaigns.length > 0
       ? [...report.campaigns].sort(
           (a, b) => b.conversionValue - a.conversionValue,
         )[0]
@@ -153,14 +153,12 @@ export function CampaignDashboard() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {report ? (
-            <Badge
-              variant="secondary"
-              className="rounded-full border border-[color:var(--panel-border)] bg-[color:var(--panel)] text-[color:var(--ink-soft)]"
-            >
-              {report.source === "live" ? "Live Klaviyo data" : "Sample data"}
-            </Badge>
-          ) : null}
+          <Badge
+            variant="secondary"
+            className="rounded-full border border-[color:var(--panel-border)] bg-[color:var(--panel)] text-[color:var(--ink-soft)]"
+          >
+            {report.source === "live" ? "Live Klaviyo data" : "Sample data"}
+          </Badge>
           <Button
             type="button"
             variant="outline"
@@ -176,7 +174,7 @@ export function CampaignDashboard() {
         </div>
       </header>
 
-      {report?.message ? (
+      {report.message ? (
         <div className="reveal rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
           {report.message}
         </div>
@@ -188,20 +186,7 @@ export function CampaignDashboard() {
         </div>
       ) : null}
 
-      {loading && !report ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-28 animate-pulse rounded-2xl bg-[color:var(--panel)]/70"
-            />
-          ))}
-        </div>
-      ) : null}
-
-      {report ? (
-        <>
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricTile
               label="Campaigns"
               value={formatNumber(report.summary.campaignCount)}
@@ -456,8 +441,6 @@ export function CampaignDashboard() {
               )}
             </CardContent>
           </Card>
-        </>
-      ) : null}
     </div>
   );
 }
