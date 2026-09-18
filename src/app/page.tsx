@@ -14,13 +14,7 @@ export default async function Home() {
           href="/c/hunter-trading"
           className="font-medium text-[color:var(--accent-strong)] underline-offset-4 hover:underline"
         >
-          Customer view · Hunter Trading →
-        </Link>
-        <Link
-          href="/admin/hunter-trading"
-          className="font-medium text-[color:var(--accent-strong)] underline-offset-4 hover:underline"
-        >
-          CSM admin →
+          Drake Waterfowl account →
         </Link>
       </div>
       <CampaignDashboard initialReport={initialReport} />
