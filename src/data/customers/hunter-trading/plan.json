@@ -1,41 +1,41 @@
 {
   "customerId": "hunter-trading",
-  "displayName": "Hunter Trading Company",
-  "syncedAt": "2026-09-18T18:14:00.000Z",
-  "callout": "SMS flow attributed revenue is soft (−18% WoW) while email campaigns are +12% YoY — review SMS cadence before Labor Day follow-ups repeat.",
+  "displayName": "Drake Waterfowl",
+  "syncedAt": "2026-09-18T23:42:02.000Z",
+  "callout": "Win-back + sunset flows are built but not activated (high priority). Cart recovery was repaired in September after zero abandonment sends through August. SMS is ~40\u201344% of Klaviyo revenue; list growth + Gmail deliverability still need attention.",
   "overview": {
     "ecomL30": {
-      "label": "Ecom revenue · last 30 days",
+      "label": "Ecom revenue \u00b7 last 30 days",
       "value": "$1.24M",
       "priorDeltaPct": -4.2,
       "yoyDeltaPct": 11.8
     },
     "ecomYesterday": {
-      "label": "Ecom revenue · yesterday",
+      "label": "Ecom revenue \u00b7 yesterday",
       "value": "$38.2K",
       "priorDeltaPct": 2.1,
       "yoyDeltaPct": -1.4
     },
     "attributedL30": {
-      "label": "Attributed revenue · last 30 days",
+      "label": "Attributed revenue \u00b7 last 30 days",
       "value": "$388K",
       "priorDeltaPct": 6.3,
       "yoyDeltaPct": 19.4
     },
     "attributedYesterday": {
-      "label": "Attributed revenue · yesterday",
+      "label": "Attributed revenue \u00b7 yesterday",
       "value": "$14.6K",
       "priorDeltaPct": -3.8,
       "yoyDeltaPct": 8.1
     },
     "ecomL7": {
-      "label": "Ecom · last 7 days",
+      "label": "Ecom \u00b7 last 7 days",
       "value": "$286K",
       "priorDeltaPct": 8.4,
       "yoyDeltaPct": 9.2
     },
     "attributedL7": {
-      "label": "Attributed · last 7 days",
+      "label": "Attributed \u00b7 last 7 days",
       "value": "$91K",
       "priorDeltaPct": 5.2,
       "yoyDeltaPct": 14
@@ -109,15 +109,21 @@
     }
   ],
   "continueItems": [
-    "VIP early-access email — 55% open, strong conversion. Keep cadence."
+    "SMS revenue growth \u2014 40\u201344% of Klaviyo revenue, +80% YoY; keep formats that work (RCS click 34% vs 2.5% baseline).",
+    "Peak send frequency achieved in season (2\u20133x/day Q4) \u2014 protect deliverability as cadence stays elevated.",
+    "YTD email+SMS attributed up ~55% with overall ecom ~+35% \u2014 business growth goal (15% vs 2025) is on track."
   ],
   "investigateItems": [
-    "Browse Abandon SMS flow −18% WoW revenue; click rate flat — likely offer fatigue."
+    "Activate churn-based win-back and sunset auto-suppression (built, not live).",
+    "Gmail deliverability / spam issue from May \u2014 still in progress; seed list monitoring every campaign.",
+    "SMS list growth: JOIN keyword single opt-in, checkout opt-in, and form display issues.",
+    "UTM gaps on abandonment product links (GA blind to attribution).",
+    "Campaign click rate still lagging (was 16th percentile)."
   ],
   "experiments": [
     {
       "id": "exp-browse-abandon",
-      "name": "Browse Abandon · Email 2",
+      "name": "Browse Abandon \u00b7 Email 2",
       "klaviyoUrl": "https://www.klaviyo.com/flow/",
       "itemType": "Flow message",
       "goal": "Increase click rate",
@@ -132,7 +138,7 @@
     },
     {
       "id": "exp-welcome-sms",
-      "name": "Welcome Series · SMS 1",
+      "name": "Welcome Series \u00b7 SMS 1",
       "klaviyoUrl": "https://www.klaviyo.com/flow/",
       "itemType": "Flow message",
       "goal": "Increase attributed revenue / recipient",
@@ -147,7 +153,7 @@
     },
     {
       "id": "exp-vip-fall",
-      "name": "VIP early access · Fall drop",
+      "name": "VIP early access \u00b7 Fall drop",
       "klaviyoUrl": "https://www.klaviyo.com/campaign/",
       "itemType": "Campaign",
       "goal": "Hold open rate while lifting CTR",
@@ -163,70 +169,281 @@
   ],
   "goals": [
     {
-      "id": "goal-flow-rev",
-      "statement": "Grow flow revenue 20% by Q4",
-      "progressPct": 64,
-      "detail": "$482K of $750K target · on track"
+      "id": "goal-biz-15",
+      "statement": "Grow business 15% vs 2025",
+      "progressPct": 72,
+      "detail": "Business \u00b7 ON TRACK \u2014 YTD email+SMS up ~55%, overall ecom up ~35%"
     },
     {
-      "id": "goal-sms-unsub",
-      "statement": "Cut SMS unsub rate below 0.4%",
+      "id": "goal-spread-demand",
+      "statement": "Spread demand across Q1\u2013Q3; reduce Q4 dependence",
+      "progressPct": 45,
+      "detail": "Business \u00b7 IN PROGRESS"
+    },
+    {
+      "id": "goal-non-wf",
+      "statement": "Grow non-waterfowl lines (summer, lifestyle, Walmart brand)",
       "progressPct": 40,
-      "detail": "Currently 0.52% · needs work"
+      "detail": "Business \u00b7 IN PROGRESS"
+    },
+    {
+      "id": "goal-rev-ceiling",
+      "statement": "Find the revenue ceiling \u2014 max send frequency/volume before diminishing returns",
+      "progressPct": 50,
+      "detail": "Business \u00b7 ONGOING"
+    },
+    {
+      "id": "goal-cost-10",
+      "statement": "Hold cost growth to 10% or less (CFO constraint)",
+      "progressPct": 50,
+      "detail": "Business \u00b7 ONGOING"
+    },
+    {
+      "id": "goal-email-freq",
+      "statement": "Increase email send frequency (2\u20133x/day in Q4 peak)",
+      "progressPct": 100,
+      "detail": "Email \u00b7 ACHIEVED in season"
+    },
+    {
+      "id": "goal-email-ctr",
+      "statement": "Improve campaign click rate (was 16th percentile)",
+      "progressPct": 40,
+      "detail": "Email \u00b7 IN PROGRESS"
+    },
+    {
+      "id": "goal-ai-prod",
+      "statement": "Streamline production with AI (Composer, ChatGPT, Claude)",
+      "progressPct": 45,
+      "detail": "Email \u00b7 IN PROGRESS"
+    },
+    {
+      "id": "goal-more-flows",
+      "statement": "Build more flows + increase flow traffic",
+      "progressPct": 55,
+      "detail": "Email \u00b7 IN PROGRESS \u2014 win-back + sunset built, not activated"
+    },
+    {
+      "id": "goal-seasonal-welcome",
+      "statement": "Seasonal welcome series (summer vs winter versions)",
+      "progressPct": 40,
+      "detail": "Email \u00b7 IN PROGRESS"
+    },
+    {
+      "id": "goal-size-personalize",
+      "statement": "Personalize content by purchaser size/profile in clearance emails",
+      "progressPct": 15,
+      "detail": "Email \u00b7 NEW Jul 1"
+    },
+    {
+      "id": "goal-jimbo",
+      "statement": "Lifecycle nurturing flows with brand storytelling (Jimbo content series)",
+      "progressPct": 25,
+      "detail": "Email \u00b7 Blocked on content, not tech"
+    },
+    {
+      "id": "goal-sms-rev",
+      "statement": "Grow SMS revenue",
+      "progressPct": 100,
+      "detail": "SMS \u00b7 ACHIEVED \u2014 40\u201344% of Klaviyo revenue, +80% YoY"
+    },
+    {
+      "id": "goal-sms-list",
+      "statement": "Restore SMS list growth",
+      "progressPct": 45,
+      "detail": "SMS \u00b7 ACTIVE \u2014 JOIN keyword single opt-in, checkout opt-in, form display issues"
+    },
+    {
+      "id": "goal-sms-offseason",
+      "statement": "Send more off-season without burning the list",
+      "progressPct": 40,
+      "detail": "SMS \u00b7 IN PROGRESS \u2014 lifecycle nurturing is the answer"
+    },
+    {
+      "id": "goal-sms-creative",
+      "statement": "Validate SMS creative formats (RCS vs single-link vs multi-option)",
+      "progressPct": 45,
+      "detail": "SMS \u00b7 IN PROGRESS"
+    },
+    {
+      "id": "goal-rcs-setup",
+      "statement": "Set up RCS",
+      "progressPct": 100,
+      "detail": "RCS \u00b7 ACHIEVED"
+    },
+    {
+      "id": "goal-rcs-ctr",
+      "statement": "Improve click rates via RCS",
+      "progressPct": 100,
+      "detail": "RCS \u00b7 ACHIEVED \u2014 34% vs 2.5% prior baseline"
+    },
+    {
+      "id": "goal-rcs-feed",
+      "statement": "Add product feed to RCS abandonment messages",
+      "progressPct": 10,
+      "detail": "RCS \u00b7 NEW Jul 1 \u2014 not yet built"
+    },
+    {
+      "id": "goal-winback",
+      "statement": "Churn-based win-back (not time-based)",
+      "progressPct": 85,
+      "detail": "Flows \u00b7 BUILT, NOT ACTIVATED \u2014 HIGH priority"
+    },
+    {
+      "id": "goal-sunset",
+      "statement": "Sunset flow for auto-suppression",
+      "progressPct": 85,
+      "detail": "Flows \u00b7 BUILT, NOT ACTIVATED \u2014 HIGH priority"
+    },
+    {
+      "id": "goal-cart",
+      "statement": "Fix cart recovery (was below 25th percentile)",
+      "progressPct": 55,
+      "detail": "Flows \u00b7 IN PROGRESS \u2014 zero abandonment sends through August; repaired Sep"
+    },
+    {
+      "id": "goal-utm",
+      "statement": "Fix UTM tracking on abandonment links",
+      "progressPct": 40,
+      "detail": "Flows \u00b7 ACTIVE \u2014 product links missing UTMs; GA blind to attribution"
+    },
+    {
+      "id": "goal-lifecycle",
+      "statement": "Lifecycle off-season nurturing flows",
+      "progressPct": 25,
+      "detail": "Flows \u00b7 Blocked on content"
+    },
+    {
+      "id": "goal-rfm",
+      "statement": "Marketing Analytics trial / RFM cohorts",
+      "progressPct": 20,
+      "detail": "Analytics \u00b7 EXPANSION INTEREST \u2014 Callie re-expressed Jul 1; define success criteria first"
+    },
+    {
+      "id": "goal-ai-seg",
+      "statement": "AI-powered segmentation (who should I send this to)",
+      "progressPct": 15,
+      "detail": "Analytics \u00b7 Callie's #1 ask \u2014 coming H2 2026 in Composer"
+    },
+    {
+      "id": "goal-bench",
+      "statement": "Competitive benchmarking (email/SMS split vs vertical peers)",
+      "progressPct": 30,
+      "detail": "Analytics \u00b7 MEDIUM \u2014 Paul to pull"
+    },
+    {
+      "id": "goal-gmail",
+      "statement": "Fix Gmail deliverability (spam issue surfaced May)",
+      "progressPct": 45,
+      "detail": "Deliverability \u00b7 IN PROGRESS"
+    },
+    {
+      "id": "goal-seed",
+      "statement": "Maintain seed list monitoring",
+      "progressPct": 90,
+      "detail": "Deliverability \u00b7 Active on every campaign"
+    },
+    {
+      "id": "goal-spam0",
+      "statement": "Validate 0% spam rate",
+      "progressPct": 35,
+      "detail": "Deliverability \u00b7 Flagged as unusually clean \u2014 needs more data"
     }
   ],
   "tasks": [
     {
-      "id": "task-sms-creative",
-      "title": "Rebuild browse abandon SMS creative",
-      "owner": "Alex (CSM)",
-      "status": "In progress"
-    },
-    {
-      "id": "task-winback",
-      "title": "Ship winback flow A/B on subject lines",
-      "owner": "Jordan (customer)",
+      "id": "task-activate-winback",
+      "title": "Activate churn-based win-back flow",
+      "owner": "CSM + Drake",
       "status": "Blocked"
     },
     {
-      "id": "task-form-qa",
-      "title": "QA new signup form on PDP",
-      "owner": "Sam",
-      "status": "Done"
+      "id": "task-activate-sunset",
+      "title": "Activate sunset auto-suppression flow",
+      "owner": "CSM + Drake",
+      "status": "Blocked"
+    },
+    {
+      "id": "task-utm-abandon",
+      "title": "Add UTMs to abandonment product links",
+      "owner": "Drake",
+      "status": "In progress"
+    },
+    {
+      "id": "task-sms-list",
+      "title": "Fix SMS list growth (JOIN keyword, checkout opt-in, forms)",
+      "owner": "Drake",
+      "status": "In progress"
+    },
+    {
+      "id": "task-gmail",
+      "title": "Continue Gmail deliverability remediation",
+      "owner": "CSM",
+      "status": "In progress"
+    },
+    {
+      "id": "task-rcs-feed",
+      "title": "Add product feed to RCS abandonment",
+      "owner": "Drake",
+      "status": "In progress"
+    },
+    {
+      "id": "task-rfm-criteria",
+      "title": "Define Marketing Analytics / RFM success criteria with Callie",
+      "owner": "Paul (CSM)",
+      "status": "In progress"
+    },
+    {
+      "id": "task-bench",
+      "title": "Pull competitive email/SMS split benchmarks",
+      "owner": "Paul (CSM)",
+      "status": "In progress"
+    },
+    {
+      "id": "task-cart-watch",
+      "title": "Monitor cart recovery after Sep repair",
+      "owner": "CSM",
+      "status": "In progress"
     }
   ],
   "meeting": {
-    "id": "mtg-qbr-sep12",
-    "date": "2026-09-12",
-    "title": "QBR",
-    "summary": "Reviewed Labor Day results. Customer wants fewer SMS blasts and more triggered flows. Agreed to pause Saturday SMS promo sends for 2 weeks.",
+    "id": "mtg-goals-loaded",
+    "date": "2026-09-18",
+    "title": "Success plan goals loaded",
+    "summary": "Loaded Drake Waterfowl overall goals from CSM notes: business growth on track, SMS/RCS wins, and high-priority unactivated win-back + sunset flows. Analytics expansion (RFM) and AI segmentation remain Callie priorities.",
     "nextSteps": [
-      "Deliver SMS cadence proposal by Sep 20",
-      "Share flow revenue forecast for Q4"
+      "Activate win-back and sunset flows",
+      "Close UTM gaps on abandonment links",
+      "Define RFM / Marketing Analytics success criteria with Callie",
+      "Keep pressure on SMS list growth and Gmail deliverability"
     ]
   },
   "productRequests": [
     {
-      "id": "pr-rfm",
-      "name": "RFM cohort builder export",
-      "status": "On roadmap"
+      "id": "pr-ai-seg",
+      "name": "AI-powered segmentation (Callie's #1 ask)",
+      "status": "Coming H2 2026 \u00b7 Composer"
     },
     {
-      "id": "pr-quiet",
-      "name": "SMS quiet hours by segment",
-      "status": "Submitted"
+      "id": "pr-rfm",
+      "name": "Marketing Analytics / RFM cohorts trial",
+      "status": "Expansion interest \u00b7 define success criteria"
+    },
+    {
+      "id": "pr-rcs-feed",
+      "name": "Product feed in RCS abandonment",
+      "status": "Customer build \u00b7 not started"
     }
   ],
   "tickets": [
     {
       "id": "48219",
       "title": "#48219 Deliverability spike",
-      "meta": "P2 · 3d"
+      "meta": "P2 \u00b7 3d"
     },
     {
       "id": "48102",
       "title": "#48102 Flow filter question",
-      "meta": "P3 · 1d"
+      "meta": "P3 \u00b7 1d"
     }
   ],
   "modules": [
