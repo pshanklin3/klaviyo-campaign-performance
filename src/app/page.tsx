@@ -1,5 +1,6 @@
 import { CampaignDashboard } from "@/components/campaign-dashboard";
 import { getCampaignReport } from "@/lib/klaviyo/client";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,14 @@ export default async function Home() {
 
   return (
     <main className="flex-1">
+      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <Link
+          href="/mockup"
+          className="inline-flex text-sm font-medium text-[color:var(--accent-strong)] underline-offset-4 hover:underline"
+        >
+          View Performance + Success plan mockup →
+        </Link>
+      </div>
       <CampaignDashboard initialReport={initialReport} />
     </main>
   );
