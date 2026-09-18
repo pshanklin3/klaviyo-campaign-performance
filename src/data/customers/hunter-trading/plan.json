@@ -38,7 +38,7 @@
       "label": "Attributed · last 7 days",
       "value": "$91K",
       "priorDeltaPct": 5.2,
-      "yoyDeltaPct": 14.0
+      "yoyDeltaPct": 14
     },
     "emailSharePct": 65,
     "campaignSharePct": 42
@@ -60,13 +60,13 @@
       "ecomYoyPct": 9.2,
       "attributed": "$91K",
       "attrPriorPct": 5.2,
-      "attrYoyPct": 14.0
+      "attrYoyPct": 14
     },
     {
       "window": "MTD",
       "ecom": "$612K",
       "ecomPriorPct": -1.2,
-      "ecomYoyPct": 14.0,
+      "ecomYoyPct": 14,
       "attributed": "$201K",
       "attrPriorPct": 2.4,
       "attrYoyPct": 17.5
@@ -87,7 +87,7 @@
       "ecomYoyPct": 16.2,
       "attributed": "$902K",
       "attrPriorPct": 4.1,
-      "attrYoyPct": 18.0
+      "attrYoyPct": 18
     },
     {
       "window": "Last quarter",
