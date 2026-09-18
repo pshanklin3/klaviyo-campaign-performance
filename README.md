@@ -1,33 +1,42 @@
-# Klaviyo Campaign Performance
+# Klaviyo Campaign Performance + Success Plan
 
-A Next.js dashboard that shows **Klaviyo campaign performance for the last 30 days** — recipients, open rate, click rate, conversions, and revenue.
+Customer-facing account health (Performance + Success plan) with a **CSM admin** editor for goals, experiments, meetings, tasks, and tickets.
 
-## Connect your Klaviyo account (SSO)
+## URLs
 
-Use **Klaviyo SSO through Cursor** — do not create or paste a private API key for normal use.
+| Page | Path |
+| --- | --- |
+| Customer view | `/c/hunter-trading` |
+| CSM admin | `/admin/hunter-trading` |
+| Legacy campaign table | `/` |
+| Old mockup path | `/mockup` → redirects to customer view |
 
-1. In this Cursor agent chat, connect / authenticate the **Klaviyo** integration (SSO sign-in to your Klaviyo account).
-2. Ask the agent to pull campaign performance (for example: “pull last 30 days of campaign performance”).
-3. The agent syncs a live snapshot into the app. The dashboard badge shows **Live Klaviyo data** for your account.
+## Connect Klaviyo (SSO)
 
-Conversion reporting uses your account’s **Placed Order** metric (via the authenticated Klaviyo session).
+Use **Klaviyo SSO through Cursor** for pulling live campaign metrics into snapshots. Do not create a private API key for normal use.
+
+1. Authenticate the Klaviyo integration in Cursor.
+2. Ask the agent to pull / refresh campaign performance.
+3. Snapshot lands in `src/data/live-campaign-report.json` (campaign table on `/`).
+
+## CSM admin (manual plan data)
+
+Edit experiments, goals, meetings, tasks, product requests, and Zendesk rows at `/admin/hunter-trading`.
+
+- Default password (local): `klaviyo-csm`
+- Override with `CSM_ADMIN_PASSWORD` in `.env.local`
+- Data file: `src/data/customers/hunter-trading/plan.json`
+
+**Persistence note:** Saving writes that JSON file. That works with `npm run dev`. On Vercel the filesystem is usually read-only — use **Copy JSON** in admin, paste into `plan.json`, commit, and redeploy. (A database can replace the file store later.)
 
 ## Run locally
 
 ```bash
 npm install
-npm run dev -- --port 43147 --hostname 127.0.0.1
+npm run dev
 ```
 
-Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
-
-If no SSO-synced snapshot is present yet, the UI shows sample data until you authenticate Klaviyo in Cursor and pull a report.
-
-## How it works
-
-- Live data comes from Klaviyo’s campaign values reporting (last 30 days), loaded through the authenticated Cursor ↔ Klaviyo connection.
-- `GET /api/campaigns` serves the synced snapshot (or sample data before SSO sync).
-- Optional private API key env vars remain only as a non-SSO fallback for advanced local setups — prefer SSO.
+Open [http://127.0.0.1:43147/c/hunter-trading](http://127.0.0.1:43147/c/hunter-trading) and [http://127.0.0.1:43147/admin/hunter-trading](http://127.0.0.1:43147/admin/hunter-trading).
 
 ## Stack
 

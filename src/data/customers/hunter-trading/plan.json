@@ -1,0 +1,243 @@
+{
+  "customerId": "hunter-trading",
+  "displayName": "Hunter Trading Company",
+  "syncedAt": "2026-09-18T18:14:00.000Z",
+  "callout": "SMS flow attributed revenue is soft (−18% WoW) while email campaigns are +12% YoY — review SMS cadence before Labor Day follow-ups repeat.",
+  "overview": {
+    "ecomL30": {
+      "label": "Ecom revenue · last 30 days",
+      "value": "$1.24M",
+      "priorDeltaPct": -4.2,
+      "yoyDeltaPct": 11.8
+    },
+    "ecomYesterday": {
+      "label": "Ecom revenue · yesterday",
+      "value": "$38.2K",
+      "priorDeltaPct": 2.1,
+      "yoyDeltaPct": -1.4
+    },
+    "attributedL30": {
+      "label": "Attributed revenue · last 30 days",
+      "value": "$388K",
+      "priorDeltaPct": 6.3,
+      "yoyDeltaPct": 19.4
+    },
+    "attributedYesterday": {
+      "label": "Attributed revenue · yesterday",
+      "value": "$14.6K",
+      "priorDeltaPct": -3.8,
+      "yoyDeltaPct": 8.1
+    },
+    "ecomL7": {
+      "label": "Ecom · last 7 days",
+      "value": "$286K",
+      "priorDeltaPct": 8.4,
+      "yoyDeltaPct": 9.2
+    },
+    "attributedL7": {
+      "label": "Attributed · last 7 days",
+      "value": "$91K",
+      "priorDeltaPct": 5.2,
+      "yoyDeltaPct": 14.0
+    },
+    "emailSharePct": 65,
+    "campaignSharePct": 42
+  },
+  "periods": [
+    {
+      "window": "Yesterday",
+      "ecom": "$38.2K",
+      "ecomPriorPct": 2.1,
+      "ecomYoyPct": -1.4,
+      "attributed": "$14.6K",
+      "attrPriorPct": -3.8,
+      "attrYoyPct": 8.1
+    },
+    {
+      "window": "Last 7 days",
+      "ecom": "$286K",
+      "ecomPriorPct": 8.4,
+      "ecomYoyPct": 9.2,
+      "attributed": "$91K",
+      "attrPriorPct": 5.2,
+      "attrYoyPct": 14.0
+    },
+    {
+      "window": "MTD",
+      "ecom": "$612K",
+      "ecomPriorPct": -1.2,
+      "ecomYoyPct": 14.0,
+      "attributed": "$201K",
+      "attrPriorPct": 2.4,
+      "attrYoyPct": 17.5
+    },
+    {
+      "window": "Last 30 days",
+      "ecom": "$1.24M",
+      "ecomPriorPct": -4.2,
+      "ecomYoyPct": 11.8,
+      "attributed": "$388K",
+      "attrPriorPct": 6.3,
+      "attrYoyPct": 19.4
+    },
+    {
+      "window": "QTD",
+      "ecom": "$2.91M",
+      "ecomPriorPct": 3.5,
+      "ecomYoyPct": 16.2,
+      "attributed": "$902K",
+      "attrPriorPct": 4.1,
+      "attrYoyPct": 18.0
+    },
+    {
+      "window": "Last quarter",
+      "ecom": "$3.44M",
+      "ecomPriorPct": -0.8,
+      "ecomYoyPct": 8.9,
+      "attributed": "$1.05M",
+      "attrPriorPct": 1.2,
+      "attrYoyPct": 12.6
+    },
+    {
+      "window": "YTD",
+      "ecom": "$9.12M",
+      "ecomPriorPct": 0,
+      "ecomYoyPct": 13.4,
+      "attributed": "$2.84M",
+      "attrPriorPct": 0,
+      "attrYoyPct": 15.8
+    }
+  ],
+  "continueItems": [
+    "VIP early-access email — 55% open, strong conversion. Keep cadence."
+  ],
+  "investigateItems": [
+    "Browse Abandon SMS flow −18% WoW revenue; click rate flat — likely offer fatigue."
+  ],
+  "experiments": [
+    {
+      "id": "exp-browse-abandon",
+      "name": "Browse Abandon · Email 2",
+      "klaviyoUrl": "https://www.klaviyo.com/flow/",
+      "itemType": "Flow message",
+      "goal": "Increase click rate",
+      "implemented": "Moved primary CTA above the fold",
+      "changedOn": "2026-09-08",
+      "metricLabel": "Click rate",
+      "benchmarkValue": "1.8%",
+      "benchmarkNote": "L30 before change",
+      "currentValue": "2.4%",
+      "currentNote": "Since Sep 8",
+      "deltaPct": 33.3
+    },
+    {
+      "id": "exp-welcome-sms",
+      "name": "Welcome Series · SMS 1",
+      "klaviyoUrl": "https://www.klaviyo.com/flow/",
+      "itemType": "Flow message",
+      "goal": "Increase attributed revenue / recipient",
+      "implemented": "Shortened copy + single offer link",
+      "changedOn": "2026-09-11",
+      "metricLabel": "Rev / recipient",
+      "benchmarkValue": "$0.41",
+      "benchmarkNote": "L30 before change",
+      "currentValue": "$0.38",
+      "currentNote": "Since Sep 11",
+      "deltaPct": -7.3
+    },
+    {
+      "id": "exp-vip-fall",
+      "name": "VIP early access · Fall drop",
+      "klaviyoUrl": "https://www.klaviyo.com/campaign/",
+      "itemType": "Campaign",
+      "goal": "Hold open rate while lifting CTR",
+      "implemented": "New hero + CTA label test",
+      "changedOn": "2026-09-15",
+      "metricLabel": "Click rate",
+      "benchmarkValue": "18.0%",
+      "benchmarkNote": "Prior VIP sends L30",
+      "currentValue": "19.6%",
+      "currentNote": "This send",
+      "deltaPct": 8.9
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal-flow-rev",
+      "statement": "Grow flow revenue 20% by Q4",
+      "progressPct": 64,
+      "detail": "$482K of $750K target · on track"
+    },
+    {
+      "id": "goal-sms-unsub",
+      "statement": "Cut SMS unsub rate below 0.4%",
+      "progressPct": 40,
+      "detail": "Currently 0.52% · needs work"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-sms-creative",
+      "title": "Rebuild browse abandon SMS creative",
+      "owner": "Alex (CSM)",
+      "status": "In progress"
+    },
+    {
+      "id": "task-winback",
+      "title": "Ship winback flow A/B on subject lines",
+      "owner": "Jordan (customer)",
+      "status": "Blocked"
+    },
+    {
+      "id": "task-form-qa",
+      "title": "QA new signup form on PDP",
+      "owner": "Sam",
+      "status": "Done"
+    }
+  ],
+  "meeting": {
+    "id": "mtg-qbr-sep12",
+    "date": "2026-09-12",
+    "title": "QBR",
+    "summary": "Reviewed Labor Day results. Customer wants fewer SMS blasts and more triggered flows. Agreed to pause Saturday SMS promo sends for 2 weeks.",
+    "nextSteps": [
+      "Deliver SMS cadence proposal by Sep 20",
+      "Share flow revenue forecast for Q4"
+    ]
+  },
+  "productRequests": [
+    {
+      "id": "pr-rfm",
+      "name": "RFM cohort builder export",
+      "status": "On roadmap"
+    },
+    {
+      "id": "pr-quiet",
+      "name": "SMS quiet hours by segment",
+      "status": "Submitted"
+    }
+  ],
+  "tickets": [
+    {
+      "id": "48219",
+      "title": "#48219 Deliverability spike",
+      "meta": "P2 · 3d"
+    },
+    {
+      "id": "48102",
+      "title": "#48102 Flow filter question",
+      "meta": "P3 · 1d"
+    }
+  ],
+  "modules": [
+    "Campaigns",
+    "Flows",
+    "List growth",
+    "Signup forms",
+    "Segments",
+    "Customer Agent",
+    "Reviews",
+    "RFM (if defined)",
+    "Customer Hub (if on)"
+  ]
+}

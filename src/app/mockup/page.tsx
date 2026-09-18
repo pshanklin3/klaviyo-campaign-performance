@@ -1,15 +1,10 @@
-import { AccountMockup } from "@/components/account-mockup";
+import { getCustomerPlan } from "@/lib/plan/store";
+import { redirect } from "next/navigation";
 
-export const metadata = {
-  title: "Account mockup · Performance + Success plan",
-  description:
-    "Static mockup of customer-facing performance executive strip and success plan.",
-};
+export const dynamic = "force-dynamic";
 
-export default function MockupPage() {
-  return (
-    <main className="flex-1">
-      <AccountMockup />
-    </main>
-  );
+export default async function MockupRedirectPage() {
+  const plan = await getCustomerPlan("hunter-trading");
+  if (plan) redirect("/c/hunter-trading");
+  redirect("/");
 }

@@ -9,12 +9,18 @@ export default async function Home() {
 
   return (
     <main className="flex-1">
-      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-wrap gap-4 px-4 pt-4 text-sm sm:px-6 lg:px-8">
         <Link
-          href="/mockup"
-          className="inline-flex text-sm font-medium text-[color:var(--accent-strong)] underline-offset-4 hover:underline"
+          href="/c/hunter-trading"
+          className="font-medium text-[color:var(--accent-strong)] underline-offset-4 hover:underline"
         >
-          View Performance + Success plan mockup →
+          Customer view · Hunter Trading →
+        </Link>
+        <Link
+          href="/admin/hunter-trading"
+          className="font-medium text-[color:var(--accent-strong)] underline-offset-4 hover:underline"
+        >
+          CSM admin →
         </Link>
       </div>
       <CampaignDashboard initialReport={initialReport} />
