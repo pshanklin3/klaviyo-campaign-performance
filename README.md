@@ -25,9 +25,18 @@ Edit experiments, goals, meetings, tasks, product requests, and Zendesk rows at 
 
 - Default password (local): `klaviyo-csm`
 - Override with `CSM_ADMIN_PASSWORD` in `.env.local`
-- Data file: `src/data/customers/hunter-trading/plan.json`
+- Seed / git mirror: `src/data/customers/hunter-trading/plan.json`
 
-**Persistence note:** Saving writes that JSON file. That works with `npm run dev`. On Vercel the filesystem is usually read-only — use **Copy JSON** in admin, paste into `plan.json`, commit, and redeploy. (A database can replace the file store later.)
+### Durable Save on Vercel
+
+Local `npm run dev` writes `plan.json` on disk. On Vercel the filesystem is read-only, so production Save uses **Vercel Blob**:
+
+1. In the Vercel project → **Storage** → **Create Blob Store** (connect to this project).
+2. That adds `BLOB_READ_WRITE_TOKEN` to the project env automatically.
+3. **Redeploy** so the new env is live.
+4. Save again on `/admin/hunter-trading` — admin should show storage **Vercel Blob**.
+
+Without the token, Save fails on Vercel with a setup hint. **Copy JSON** remains available as a backup.
 
 ## Run locally
 
@@ -40,4 +49,4 @@ Open [http://127.0.0.1:43147/c/hunter-trading](http://127.0.0.1:43147/c/hunter-t
 
 ## Stack
 
-Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui.
+Next.js (App Router), TypeScript, Tailwind CSS, shadcn/ui, Vercel Blob (optional for production Save).

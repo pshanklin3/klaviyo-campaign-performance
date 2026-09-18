@@ -33,15 +33,20 @@ function newId(prefix: string) {
 export function AdminPlanEditor({
   initialPlan,
   defaultPassword,
+  storageMode,
 }: {
   initialPlan: CustomerPlan;
   defaultPassword: string;
+  storageMode: "blob" | "file";
 }) {
   const [plan, setPlan] = useState<CustomerPlan>(initialPlan);
   const [password, setPassword] = useState(defaultPassword);
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeStorage, setActiveStorage] = useState<"blob" | "file">(
+    storageMode,
+  );
 
   const exportJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
 
@@ -64,6 +69,8 @@ export function AdminPlanEditor({
       const body = (await response.json().catch(() => null)) as {
         error?: string;
         hint?: string;
+        storage?: "blob" | "file";
+        plan?: CustomerPlan;
       } | null;
       if (!response.ok) {
         throw new Error(
@@ -71,8 +78,14 @@ export function AdminPlanEditor({
             "Save failed",
         );
       }
-      setStatus("Saved. Customer page will show these updates after refresh.");
-      setPlan((p) => ({ ...p, syncedAt: new Date().toISOString() }));
+      if (body?.storage) setActiveStorage(body.storage);
+      if (body?.plan) setPlan(body.plan);
+      else setPlan((p) => ({ ...p, syncedAt: new Date().toISOString() }));
+      setStatus(
+        body?.storage === "blob"
+          ? "Saved to Vercel Blob. Customer page will show updates after refresh."
+          : "Saved to local plan.json. Customer page will show updates after refresh.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -229,9 +242,11 @@ export function AdminPlanEditor({
           <CardTitle className="font-heading text-lg">Save</CardTitle>
           <CardDescription>
             Default local password is <code>klaviyo-csm</code>. Override with{" "}
-            <code>CSM_ADMIN_PASSWORD</code>. On Vercel, filesystem saves may
-            fail — use Export JSON and commit{" "}
-            <code>src/data/customers/{plan.customerId}/plan.json</code>.
+            <code>CSM_ADMIN_PASSWORD</code>. Storage:{" "}
+            <strong>{activeStorage === "blob" ? "Vercel Blob" : "local file"}</strong>
+            {activeStorage === "file"
+              ? ". On Vercel, create a Blob store (Project → Storage) so Save works in production."
+              : ". Edits persist across deploys."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">

@@ -1,6 +1,7 @@
 import {
   getAdminPassword,
   getCustomerPlan,
+  getStorageMode,
   isAdminAuthorized,
   saveCustomerPlan,
 } from "@/lib/plan/store";
@@ -43,7 +44,8 @@ export async function PUT(request: Request, { params }: Params) {
     return NextResponse.json(
       {
         error: result.error,
-        hint: "On Vercel the filesystem is read-only. Edit locally (npm run dev), or export JSON and commit plan.json. Set CSM_ADMIN_PASSWORD for admin access.",
+        hint: result.hint,
+        storage: getStorageMode(),
         passwordHint:
           process.env.NODE_ENV === "production"
             ? undefined
@@ -53,5 +55,11 @@ export async function PUT(request: Request, { params }: Params) {
     );
   }
 
-  return NextResponse.json({ ok: true, plan: body });
+  const plan = await getCustomerPlan(customerId);
+  return NextResponse.json({
+    ok: true,
+    persisted: result.persisted,
+    storage: result.storage,
+    plan: plan ?? body,
+  });
 }

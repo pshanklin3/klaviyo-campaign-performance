@@ -1,5 +1,9 @@
 import { AdminPlanEditor } from "@/components/admin-plan-editor";
-import { getAdminPassword, getCustomerPlan } from "@/lib/plan/store";
+import {
+  getAdminPassword,
+  getCustomerPlan,
+  getStorageMode,
+} from "@/lib/plan/store";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +27,7 @@ export default async function AdminCustomerPage({ params }: Props) {
     <main className="flex-1">
       <AdminPlanEditor
         initialPlan={plan}
+        storageMode={getStorageMode()}
         defaultPassword={
           process.env.NODE_ENV === "production" ? "" : getAdminPassword()
         }
