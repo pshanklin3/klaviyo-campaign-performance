@@ -1,4 +1,6 @@
 import { formatISO, subDays } from "date-fns";
+import { readFile } from "fs/promises";
+import path from "path";
 import { getMockCampaignReport } from "./mock";
 import type {
   CampaignPerformance,
@@ -287,6 +289,25 @@ function mergeCampaignData(
   });
 }
 
+async function getLiveSnapshot(): Promise<CampaignReport | null> {
+  try {
+    const filePath = path.join(
+      process.cwd(),
+      "src/data/live-campaign-report.json",
+    );
+    const raw = await readFile(filePath, "utf8");
+    const report = JSON.parse(raw) as CampaignReport;
+    if (!report?.campaigns || !report?.summary) return null;
+    return {
+      ...report,
+      source: "live",
+      message: undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function getCampaignReport(): Promise<CampaignReport> {
   const end = new Date();
   const start = subDays(end, 29);
@@ -297,6 +318,8 @@ export async function getCampaignReport(): Promise<CampaignReport> {
   };
 
   if (!getApiKey()) {
+    const snapshot = await getLiveSnapshot();
+    if (snapshot) return snapshot;
     return getMockCampaignReport();
   }
 
@@ -320,6 +343,15 @@ export async function getCampaignReport(): Promise<CampaignReport> {
           : undefined,
     };
   } catch (error) {
+    const snapshot = await getLiveSnapshot();
+    if (snapshot) {
+      const detail =
+        error instanceof Error ? error.message : "Unknown Klaviyo error";
+      return {
+        ...snapshot,
+        message: `Live API request failed (${detail}). Showing the latest synced Klaviyo snapshot.`,
+      };
+    }
     const mock = getMockCampaignReport();
     const detail =
       error instanceof Error ? error.message : "Unknown Klaviyo error";
