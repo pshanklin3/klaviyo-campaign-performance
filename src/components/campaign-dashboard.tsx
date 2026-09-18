@@ -33,7 +33,7 @@ import {
   RefreshCw,
   Smartphone,
 } from "lucide-react";
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useState } from "react";
 
 type SortKey =
   | "sentAt"
@@ -86,31 +86,30 @@ export function CampaignDashboard({
   const [report, setReport] = useState<CampaignReport>(initialReport);
   const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("conversionValue");
-  const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    startTransition(() => {
-      void (async () => {
-        try {
-          const response = await fetch("/api/campaigns", { cache: "no-store" });
-          if (!response.ok) {
-            const body = (await response.json().catch(() => null)) as {
-              error?: string;
-            } | null;
-            throw new Error(body?.error ?? "Failed to load campaign report");
-          }
-          const data = (await response.json()) as CampaignReport;
-          setReport(data);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Something went wrong");
-        } finally {
-          setLoading(false);
+    void (async () => {
+      try {
+        const response = await fetch("/api/campaigns", { cache: "no-store" });
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(body?.error ?? "Failed to load campaign report");
         }
-      })();
-    });
+        const data = (await response.json()) as CampaignReport;
+        setReport(data);
+        setLastRefreshedAt(new Date());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const sorted = [...report.campaigns].sort((a, b) => {
@@ -144,11 +143,8 @@ export function CampaignDashboard({
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[color:var(--ink-soft)] sm:text-base">
               Opens, clicks, conversions, and revenue across sent campaigns in
-              the last 30 days
-              {report
-                ? ` (${report.timeframe.start} → ${report.timeframe.end})`
-                : ""}
-              .
+              the last 30 days ({report.timeframe.start} →{" "}
+              {report.timeframe.end}).
             </p>
           </div>
         </div>
@@ -159,17 +155,25 @@ export function CampaignDashboard({
           >
             {report.source === "live" ? "Live Klaviyo data" : "Sample data"}
           </Badge>
+          {lastRefreshedAt ? (
+            <span className="text-xs text-[color:var(--ink-muted)]">
+              Updated{" "}
+              {lastRefreshedAt.toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </span>
+          ) : null}
           <Button
             type="button"
             variant="outline"
             onClick={load}
-            disabled={loading || isPending}
+            disabled={loading}
             className="rounded-full border-[color:var(--panel-border)] bg-[color:var(--panel)]"
           >
-            <RefreshCw
-              className={`size-4 ${loading || isPending ? "animate-spin" : ""}`}
-            />
-            Refresh
+            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+            {loading ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
       </header>
@@ -375,7 +379,9 @@ export function CampaignDashboard({
                 ))}
               </div>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
+            <CardContent
+              className={`overflow-x-auto transition-opacity ${loading ? "opacity-60" : "opacity-100"}`}
+            >
               {sorted.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[color:var(--panel-border)] px-4 py-10 text-center text-sm text-[color:var(--ink-soft)]">
                   No campaign performance found for the last 30 days.
