@@ -350,6 +350,129 @@ export function AccountMockup() {
             </CardContent>
           </Card>
 
+          <Card className="border-[color:var(--panel-border)] bg-[color:var(--panel)]/90">
+            <CardHeader>
+              <CardTitle className="font-heading text-xl">
+                In motion · performance experiments
+              </CardTitle>
+              <CardDescription>
+                Active work on revenue or engagement — benchmark before the
+                change vs current since go-live
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                {
+                  name: "Browse Abandon · Email 2",
+                  href: "https://www.klaviyo.com/flow/example/browse-abandon",
+                  type: "Flow message",
+                  goal: "Increase click rate",
+                  implemented: "Moved primary CTA above the fold",
+                  changedOn: "Sep 8, 2026",
+                  metric: "Click rate",
+                  benchmark: "1.8%",
+                  benchmarkNote: "L30 before change",
+                  current: "2.4%",
+                  currentNote: "Since Sep 8",
+                  delta: 33.3,
+                },
+                {
+                  name: "Welcome Series · SMS 1",
+                  href: "https://www.klaviyo.com/flow/example/welcome-sms",
+                  type: "Flow message",
+                  goal: "Increase attributed revenue / recipient",
+                  implemented: "Shortened copy + single offer link",
+                  changedOn: "Sep 11, 2026",
+                  metric: "Rev / recipient",
+                  benchmark: "$0.41",
+                  benchmarkNote: "L30 before change",
+                  current: "$0.38",
+                  currentNote: "Since Sep 11",
+                  delta: -7.3,
+                },
+                {
+                  name: "VIP early access · Fall drop",
+                  href: "https://www.klaviyo.com/campaign/example/vip-fall",
+                  type: "Campaign",
+                  goal: "Hold open rate while lifting CTR",
+                  implemented: "New hero + CTA label test",
+                  changedOn: "Sep 15, 2026",
+                  metric: "Click rate",
+                  benchmark: "18.0%",
+                  benchmarkNote: "Prior VIP sends L30",
+                  current: "19.6%",
+                  currentNote: "This send",
+                  delta: 8.9,
+                },
+              ].map((item) => (
+                <div
+                  key={item.name}
+                  className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="rounded-full">
+                          {item.type}
+                        </Badge>
+                        <Badge variant="outline" className="rounded-full">
+                          Since {item.changedOn}
+                        </Badge>
+                      </div>
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-heading text-lg font-semibold text-[color:var(--ink)] underline-offset-4 hover:underline"
+                      >
+                        {item.name}
+                      </a>
+                      <p className="text-sm text-[color:var(--ink-soft)]">
+                        <span className="font-medium text-[color:var(--ink)]">
+                          Goal:
+                        </span>{" "}
+                        {item.goal}
+                      </p>
+                      <p className="text-sm text-[color:var(--ink-soft)]">
+                        <span className="font-medium text-[color:var(--ink)]">
+                          Implemented:
+                        </span>{" "}
+                        {item.implemented}
+                      </p>
+                    </div>
+                    <div className="grid min-w-[220px] grid-cols-2 gap-3 rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--panel)]/80 p-3">
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
+                          Benchmark
+                        </p>
+                        <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
+                          {item.benchmark}
+                        </p>
+                        <p className="text-xs text-[color:var(--ink-muted)]">
+                          {item.metric} · {item.benchmarkNote}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
+                          Current
+                        </p>
+                        <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
+                          {item.current}
+                        </p>
+                        <p className="text-xs text-[color:var(--ink-muted)]">
+                          {item.currentNote}
+                        </p>
+                        <div className="mt-1 text-sm">
+                          <Delta value={item.delta} suffix="%" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
           <section className="grid gap-4 lg:grid-cols-2">
             <Card className="border-[color:var(--panel-border)] bg-[color:var(--panel)]/90">
               <CardHeader>
