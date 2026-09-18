@@ -2,7 +2,15 @@
 
 A Next.js dashboard that shows **Klaviyo campaign performance for the last 30 days** — recipients, open rate, click rate, conversions, and revenue.
 
-Without an API key it loads realistic sample data so you can explore the UI immediately.
+## Connect your Klaviyo account (SSO)
+
+Use **Klaviyo SSO through Cursor** — do not create or paste a private API key for normal use.
+
+1. In this Cursor agent chat, connect / authenticate the **Klaviyo** integration (SSO sign-in to your Klaviyo account).
+2. Ask the agent to pull campaign performance (for example: “pull last 30 days of campaign performance”).
+3. The agent syncs a live snapshot into the app. The dashboard badge shows **Live Klaviyo data** for your account.
+
+Conversion reporting uses your account’s **Placed Order** metric (via the authenticated Klaviyo session).
 
 ## Run locally
 
@@ -13,24 +21,13 @@ npm run dev -- --port 43147 --hostname 127.0.0.1
 
 Open [http://127.0.0.1:43147](http://127.0.0.1:43147).
 
-## Connect your Klaviyo account
-
-1. In Klaviyo, create a **Private API Key** with at least `campaigns:read` and `metrics:read`.
-2. Copy `.env.example` to `.env.local` and set:
-
-```bash
-KLAVIYO_PRIVATE_API_KEY=pk_your_key_here
-```
-
-3. Optionally set `KLAVIYO_CONVERSION_METRIC_ID` to your Placed Order metric ID. If omitted, the app resolves **Placed Order** (then Ordered Product / Checkout Started) from `GET /api/metrics/`.
-
-4. Restart the dev server. The dashboard badge switches from **Sample data** to **Live Klaviyo data**.
+If no SSO-synced snapshot is present yet, the UI shows sample data until you authenticate Klaviyo in Cursor and pull a report.
 
 ## How it works
 
-- `GET /api/campaigns` calls Klaviyo’s **Campaign Values Report** (`POST /api/campaign-values-reports/`) with `timeframe.key = last_30_days`.
-- Campaign names and send times come from `GET /api/campaigns/`.
-- On missing credentials or API errors, the route falls back to mock data and surfaces a clear banner.
+- Live data comes from Klaviyo’s campaign values reporting (last 30 days), loaded through the authenticated Cursor ↔ Klaviyo connection.
+- `GET /api/campaigns` serves the synced snapshot (or sample data before SSO sync).
+- Optional private API key env vars remain only as a non-SSO fallback for advanced local setups — prefer SSO.
 
 ## Stack
 

@@ -184,6 +184,6 @@ export function getMockCampaignReport(): CampaignReport {
     summary: summarize(campaigns),
     campaigns,
     message:
-      "Showing sample campaign data. Add KLAVIYO_PRIVATE_API_KEY to .env.local to load live performance from your Klaviyo account.",
+      "Showing sample campaign data. Authenticate Klaviyo with SSO in Cursor, then ask to pull last-30-day campaign performance.",
   };
 }
