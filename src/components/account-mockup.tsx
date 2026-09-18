@@ -135,19 +135,20 @@ export function AccountMockup() {
           <Card className="border-[color:var(--panel-border)] bg-[color:var(--panel)]/90">
             <CardHeader className="pb-3">
               <CardTitle className="font-heading text-xl">
-                Executive strip
+                Account Overview
               </CardTitle>
               <CardDescription>
-                Featured pulse — not every window at once
+                Featured pulse — ecom + attributed revenue, not every window at
+                once
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-[1.4fr_1fr_1fr]">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
                   <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
                     Ecom revenue · last 30 days
                   </p>
-                  <p className="mt-2 font-heading text-4xl font-semibold tabular-nums text-[color:var(--ink)]">
+                  <p className="mt-2 font-heading text-3xl font-semibold tabular-nums text-[color:var(--ink)] sm:text-4xl">
                     $1.24M
                   </p>
                   <div className="mt-2 flex flex-wrap gap-3 text-sm">
@@ -161,13 +162,82 @@ export function AccountMockup() {
                 </div>
                 <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
                   <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
+                    Ecom revenue · yesterday
+                  </p>
+                  <p className="mt-2 font-heading text-3xl font-semibold tabular-nums text-[color:var(--ink)] sm:text-4xl">
+                    $38.2K
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                    <span>
+                      vs prior <Delta value={2.1} suffix="%" />
+                    </span>
+                    <span>
+                      YoY <Delta value={-1.4} suffix="%" />
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
+                    Attributed revenue · last 30 days
+                  </p>
+                  <p className="mt-2 font-heading text-3xl font-semibold tabular-nums text-[color:var(--ink)] sm:text-4xl">
+                    $388K
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                    <span>
+                      vs prior <Delta value={6.3} suffix="%" />
+                    </span>
+                    <span>
+                      YoY <Delta value={19.4} suffix="%" />
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
+                    Attributed revenue · yesterday
+                  </p>
+                  <p className="mt-2 font-heading text-3xl font-semibold tabular-nums text-[color:var(--ink)] sm:text-4xl">
+                    $14.6K
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                    <span>
+                      vs prior <Delta value={-3.8} suffix="%" />
+                    </span>
+                    <span>
+                      YoY <Delta value={8.1} suffix="%" />
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
+                <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
                     Near-term · last 7 days
                   </p>
-                  <p className="mt-2 font-heading text-3xl font-semibold tabular-nums">
-                    $286K
-                  </p>
-                  <div className="mt-2 text-sm">
-                    vs prior <Delta value={8.4} suffix="%" />
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-[color:var(--ink-muted)]">
+                        Ecom
+                      </p>
+                      <p className="font-heading text-2xl font-semibold tabular-nums">
+                        $286K
+                      </p>
+                      <div className="mt-1 text-sm">
+                        <Delta value={8.4} suffix="%" />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[color:var(--ink-muted)]">
+                        Attributed
+                      </p>
+                      <p className="font-heading text-2xl font-semibold tabular-nums">
+                        $91K
+                      </p>
+                      <div className="mt-1 text-sm">
+                        <Delta value={5.2} suffix="%" />
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
@@ -175,9 +245,9 @@ export function AccountMockup() {
                     Action callout
                   </p>
                   <p className="mt-3 text-sm leading-relaxed text-[color:var(--ink)]">
-                    SMS flow revenue is soft (−18% WoW) while email campaigns are
-                    +12% YoY — review SMS cadence before Labor Day follow-ups
-                    repeat.
+                    SMS flow attributed revenue is soft (−18% WoW) while email
+                    campaigns are +12% YoY — review SMS cadence before Labor Day
+                    follow-ups repeat.
                   </p>
                 </div>
               </div>
@@ -185,13 +255,13 @@ export function AccountMockup() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
                   <p className="mb-3 text-sm font-medium text-[color:var(--ink)]">
-                    Channel mix · L30 revenue
+                    Channel mix · L30 attributed revenue
                   </p>
                   <ShareBar leftLabel="Email" rightLabel="SMS" leftPct={65} />
                 </div>
                 <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
                   <p className="mb-3 text-sm font-medium text-[color:var(--ink)]">
-                    Engine mix · L30 revenue
+                    Engine mix · L30 attributed revenue
                   </p>
                   <ShareBar
                     leftLabel="Campaigns"
@@ -204,7 +274,7 @@ export function AccountMockup() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-[color:var(--ink-muted)]">
                   Full matrix includes Yesterday, L7, MTD, L30, QTD, last
-                  quarter, YTD — each with prior + YoY.
+                  quarter, YTD — ecom + attributed, each with prior + YoY.
                 </p>
                 <Button
                   type="button"
@@ -223,38 +293,56 @@ export function AccountMockup() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Window</TableHead>
-                        <TableHead className="text-right">Revenue</TableHead>
-                        <TableHead className="text-right">vs prior</TableHead>
-                        <TableHead className="text-right">YoY</TableHead>
+                        <TableHead className="text-right">Ecom</TableHead>
+                        <TableHead className="text-right">Ecom prior</TableHead>
+                        <TableHead className="text-right">Ecom YoY</TableHead>
+                        <TableHead className="text-right">Attributed</TableHead>
+                        <TableHead className="text-right">Attr prior</TableHead>
+                        <TableHead className="text-right">Attr YoY</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {[
-                        ["Yesterday", "$38.2K", 2.1, -1.4],
-                        ["Last 7 days", "$286K", 8.4, 9.2],
-                        ["MTD", "$612K", -1.2, 14.0],
-                        ["Last 30 days", "$1.24M", -4.2, 11.8],
-                        ["QTD", "$2.91M", 3.5, 16.2],
-                        ["Last quarter", "$3.44M", -0.8, 8.9],
-                        ["YTD", "$9.12M", 0, 13.4],
-                      ].map(([label, rev, prior, yoy]) => (
-                        <TableRow key={String(label)}>
-                          <TableCell>{label}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {rev}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {Number(prior) === 0 ? (
-                              "—"
-                            ) : (
-                              <Delta value={Number(prior)} suffix="%" />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Delta value={Number(yoy)} suffix="%" />
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                        ["Yesterday", "$38.2K", 2.1, -1.4, "$14.6K", -3.8, 8.1],
+                        ["Last 7 days", "$286K", 8.4, 9.2, "$91K", 5.2, 14.0],
+                        ["MTD", "$612K", -1.2, 14.0, "$201K", 2.4, 17.5],
+                        ["Last 30 days", "$1.24M", -4.2, 11.8, "$388K", 6.3, 19.4],
+                        ["QTD", "$2.91M", 3.5, 16.2, "$902K", 4.1, 18.0],
+                        ["Last quarter", "$3.44M", -0.8, 8.9, "$1.05M", 1.2, 12.6],
+                        ["YTD", "$9.12M", 0, 13.4, "$2.84M", 0, 15.8],
+                      ].map(
+                        ([label, ecom, ePrior, eYoy, attr, aPrior, aYoy]) => (
+                          <TableRow key={String(label)}>
+                            <TableCell>{label}</TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {ecom}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {Number(ePrior) === 0 ? (
+                                "—"
+                              ) : (
+                                <Delta value={Number(ePrior)} suffix="%" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Delta value={Number(eYoy)} suffix="%" />
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {attr}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {Number(aPrior) === 0 ? (
+                                "—"
+                              ) : (
+                                <Delta value={Number(aPrior)} suffix="%" />
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Delta value={Number(aYoy)} suffix="%" />
+                            </TableCell>
+                          </TableRow>
+                        ),
+                      )}
                     </TableBody>
                   </Table>
                 </div>
