@@ -454,7 +454,8 @@ export function CustomerAccountView({
           },
         },
       );
-      const body = (await response.json().catch(() => null)) as {
+      const rawText = await response.text();
+      type RefreshBody = {
         error?: string;
         hint?: string;
         message?: string;
@@ -462,10 +463,14 @@ export function CustomerAccountView({
         plan?: CustomerPlan;
         storage?: "blob" | "file";
         results?: { id: string; name: string; ok: boolean; detail: string }[];
-      } | null;
+      };
+      let body: RefreshBody | null = null;
+      try {
+        body = rawText ? (JSON.parse(rawText) as RefreshBody) : null;
+      } catch {
+        body = null;
+      }
       if (!response.ok) {
-        // Only soft-prompt reconnect when the API says OAuth is missing —
-        // do not match "Connect" inside generic hints (that hid real errors).
         if (body?.mode === "oauth_required" || body?.mode === "mcp_required") {
           setKlaviyoConnected(false);
           setStatus(
@@ -475,10 +480,23 @@ export function CustomerAccountView({
           setError(body?.error ?? null);
           return;
         }
+        if (
+          response.status === 504 ||
+          response.status === 502 ||
+          response.status === 408 ||
+          !body
+        ) {
+          throw new Error(
+            `Refresh timed out (HTTP ${response.status}). Overview pull was shortened — wait 20s and click Refresh metrics once more.`,
+          );
+        }
         throw new Error(
           [body?.error, body?.hint].filter(Boolean).join(" — ") ||
-            "Refresh failed",
+            `Refresh failed (HTTP ${response.status})`,
         );
+      }
+      if (!body) {
+        throw new Error("Refresh returned an empty response — try again.");
       }
       if (body?.plan) {
         setPlan({

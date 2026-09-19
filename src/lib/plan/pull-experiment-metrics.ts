@@ -191,7 +191,7 @@ export async function pullExperimentMetrics(
 ): Promise<PullExperimentResult> {
   // Auth comes from withKlaviyoAuth (OAuth) or env API key fallback inside klaviyoFetch.
   try {
-    // Probe auth early for a clearer error
+    // Auth + conversion metric come from the shared cache / withKlaviyoAuth.
     await findConversionMetricId();
   } catch (error) {
     return {
@@ -214,20 +214,18 @@ export async function pullExperimentMetrics(
     const bounds = windowBounds(normalized.changedOn, pull.benchmarkDays);
     const windows = describeMetricWindows(normalized);
 
-    const [benchmarkStats, currentStats] = [
-      await statsForWindow(
-        normalized,
-        bounds.benchmarkStart,
-        bounds.benchmarkEnd,
-        conversionMetricId,
-      ),
-      await statsForWindow(
-        normalized,
-        bounds.currentStart,
-        bounds.currentEnd,
-        conversionMetricId,
-      ),
-    ];
+    const benchmarkStats = await statsForWindow(
+      normalized,
+      bounds.benchmarkStart,
+      bounds.benchmarkEnd,
+      conversionMetricId,
+    );
+    const currentStats = await statsForWindow(
+      normalized,
+      bounds.currentStart,
+      bounds.currentEnd,
+      conversionMetricId,
+    );
 
     const preset = pull.preset === "custom" ? "click_rate" : pull.preset;
     // For custom labels that look like revenue/click, infer from goal label

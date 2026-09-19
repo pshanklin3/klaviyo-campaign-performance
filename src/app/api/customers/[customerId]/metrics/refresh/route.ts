@@ -1,4 +1,5 @@
 import {
+  clearConversionMetricCache,
   findConversionMetricId,
   hasKlaviyoConnection,
   resolveKlaviyoAuth,
@@ -16,12 +17,14 @@ import {
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+/** Pro plans honor up to 300s; Hobby still caps lower — finish overview first. */
 export const maxDuration = 60;
 
 type Params = { params: Promise<{ customerId: string }> };
 
 /**
  * One-click refresh via Klaviyo OAuth (preferred) or optional API key.
+ * Overview is required; experiments are best-effort within a time budget.
  */
 export async function POST(request: Request, { params }: Params) {
   const { customerId } = await params;
@@ -47,19 +50,54 @@ export async function POST(request: Request, { params }: Params) {
     );
   }
 
+  const startedAt = Date.now();
+  // Leave headroom before the platform kills the function (~60s).
+  const experimentDeadlineMs = startedAt + 45_000;
+
   try {
+    clearConversionMetricCache();
     const auth = await resolveKlaviyoAuth(customerId);
-    // Sequential pulls keep OAuth auth context reliable and surface clearer errors.
-    // Overview first (ecom + L30 attributed); experiments second so a slow
-    // report rate-limit still saves overview progress.
-    const result = await withKlaviyoAuth(auth, async () => {
-      // Lightweight auth probe before the heavy report fan-out
+
+    const overviewPull = await withKlaviyoAuth(auth, async () => {
       await findConversionMetricId();
-      const overviewPull = await pullOverviewMetrics(plan);
-      const experimentPull = await pullAllExperimentMetrics(plan.experiments);
-      return { overviewPull, experimentPull };
+      return pullOverviewMetrics(plan);
     });
-    const { overviewPull, experimentPull } = result;
+
+    let experiments = plan.experiments;
+    let experimentResults: {
+      id: string;
+      name: string;
+      ok: boolean;
+      detail: string;
+    }[] = [];
+
+    const remainingMs = experimentDeadlineMs - Date.now();
+    if (remainingMs > 12_000) {
+      try {
+        const experimentPull = await withKlaviyoAuth(auth, () =>
+          pullAllExperimentMetrics(plan.experiments),
+        );
+        experiments = experimentPull.experiments;
+        experimentResults = experimentPull.results;
+      } catch (experimentError) {
+        experimentResults = plan.experiments.map((e) => ({
+          id: e.id,
+          name: e.name,
+          ok: false,
+          detail:
+            experimentError instanceof Error
+              ? experimentError.message
+              : "Experiment pull failed",
+        }));
+      }
+    } else {
+      experimentResults = plan.experiments.map((e) => ({
+        id: e.id,
+        name: e.name,
+        ok: true,
+        detail: "Skipped this pass (overview saved; refresh again for experiments)",
+      }));
+    }
 
     const syncedAt = new Date().toISOString();
     const nextPlan = {
@@ -68,7 +106,7 @@ export async function POST(request: Request, { params }: Params) {
       callout: overviewPull.callout,
       overview: overviewPull.overview,
       periods: overviewPull.periods,
-      experiments: experimentPull.experiments,
+      experiments,
     };
 
     const saved = await saveCustomerPlan(customerId, nextPlan);
@@ -89,7 +127,8 @@ export async function POST(request: Request, { params }: Params) {
       mode: auth.type === "oauth" ? "oauth" : "api_key",
       storage: saved.storage,
       plan: fresh ?? nextPlan,
-      results: experimentPull.results,
+      results: experimentResults,
+      elapsedMs: Date.now() - startedAt,
       passwordHint:
         process.env.NODE_ENV === "production"
           ? undefined
@@ -111,6 +150,7 @@ export async function POST(request: Request, { params }: Params) {
             ? "Klaviyo reporting is rate-limited. Wait ~30s and click Refresh metrics once."
             : "If this keeps failing, Reconnect Klaviyo and try Refresh again.",
         mode: authFailed ? "oauth_required" : undefined,
+        elapsedMs: Date.now() - startedAt,
       },
       { status: authFailed ? 401 : 500 },
     );

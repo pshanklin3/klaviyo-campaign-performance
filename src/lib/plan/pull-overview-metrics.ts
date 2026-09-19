@@ -1,5 +1,4 @@
 import {
-  aggregateStatistics,
   fetchCampaignValuesReport,
   fetchFlowValuesReport,
   findConversionMetricId,
@@ -61,7 +60,18 @@ function metric(
   };
 }
 
-/** Campaign/flow reports are rate-limited (~1/s) — call them one at a time. */
+function parseMoney(display: string | undefined): number | null {
+  if (!display || display === "—") return null;
+  const cleaned = display.replace(/[$,\s]/g, "").toUpperCase();
+  const match = cleaned.match(/^(-?\d+(?:\.\d+)?)([KM])?$/);
+  if (!match) return null;
+  let n = Number(match[1]);
+  if (match[2] === "K") n *= 1_000;
+  if (match[2] === "M") n *= 1_000_000;
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Campaign then flow — values-reports share a 1/s queue. */
 async function attributedFor(
   conversionMetricId: string,
   timeframe: { key: string } | { start: string; end: string },
@@ -106,18 +116,29 @@ function rangeSum(
   });
 }
 
+function conversionHintsFromPlan(plan: CustomerPlan): string[] {
+  const ids: string[] = [];
+  for (const exp of plan.experiments) {
+    for (const ref of exp.metricPull?.metrics ?? []) {
+      if (ref.metricId) ids.push(ref.metricId);
+    }
+  }
+  return ids;
+}
+
 /**
- * Pull Account Overview.
- * Ecom (metric-aggregates) can cover all windows.
- * Attributed (campaign/flow reports) is tightly rate-limited — only refresh
- * L30 current + prior, and keep other attributed cells from the existing plan.
+ * Pull Account Overview fast enough for Vercel’s ~60s limit.
+ * Ecom: all core windows via metric-aggregates.
+ * Attributed: L30 current only (prior delta kept from plan when possible).
  */
 export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   overview: CustomerPlan["overview"];
   periods: PeriodRow[];
   callout: string;
 }> {
-  const conversionMetricId = await findConversionMetricId();
+  const conversionMetricId = await findConversionMetricId(
+    conversionHintsFromPlan(plan),
+  );
   const now = new Date();
   const today = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
@@ -161,7 +182,6 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     ),
   );
 
-  // Ecom aggregates — sequential via shared report queue in reporting.ts
   const ecomL30 = await rangeSum(conversionMetricId, l30Start, today);
   const ecomPrior30 = await rangeSum(
     conversionMetricId,
@@ -187,12 +207,15 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     priorMtdSameDayEnd,
   );
 
-  // Attributed: only L30 (+ prior) to stay within reporting rate limits
+  // One attributed window only — reuse last known prior absolute when possible
   const l30 = await attributedFor(conversionMetricId, { key: "last_30_days" });
-  const prior30 = await attributedFor(conversionMetricId, {
-    start: `${isoDay(priorL30Start)}T00:00:00Z`,
-    end: `${isoDay(priorL30End)}T00:00:00Z`,
-  });
+  const oldAttrCurrent = parseMoney(plan.overview.attributedL30?.value);
+  const oldAttrDelta = plan.overview.attributedL30?.priorDeltaPct ?? 0;
+  let prior30Total = 0;
+  if (oldAttrCurrent != null && oldAttrCurrent > 0) {
+    prior30Total =
+      oldAttrDelta <= -99.9 ? 0 : oldAttrCurrent / (1 + oldAttrDelta / 100);
+  }
 
   const emailShare =
     l30.total > 0 ? Math.round((l30.email / l30.total) * 100) : 50;
@@ -201,7 +224,6 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   const smsShare = 100 - emailShare;
   const flowShare = 100 - campaignShare;
 
-  // Keep shorter-window attributed cards from the previous plan when present
   const keepAttr = (
     key: keyof CustomerPlan["overview"],
     fallbackLabel: string,
@@ -231,7 +253,7 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     attributedL30: metric(
       "Attributed revenue · last 30 days",
       l30.total,
-      prior30.total,
+      prior30Total,
     ),
     attributedYesterday: keepAttr(
       "attributedYesterday",
@@ -288,7 +310,7 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
       ecomL30,
       ecomPrior30,
       formatMoney(l30.total),
-      pctDelta(l30.total, prior30.total),
+      pctDelta(l30.total, prior30Total),
     ),
   ];
 
@@ -311,10 +333,10 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     `Live Klaviyo ecom (Placed Order) L30 is ${formatMoney(ecomL30)} ` +
     `(${pctDelta(ecomL30, ecomPrior30) >= 0 ? "+" : ""}${pctDelta(ecomL30, ecomPrior30)}% vs prior 30d); ` +
     `attributed ${formatMoney(l30.total)} ` +
-    `(${pctDelta(l30.total, prior30.total) >= 0 ? "+" : ""}${pctDelta(l30.total, prior30.total)}%). ` +
+    `(${pctDelta(l30.total, prior30Total) >= 0 ? "+" : ""}${pctDelta(l30.total, prior30Total)}%). ` +
     `Email/SMS mix ${emailShare}/${smsShare}; campaigns/flows ${campaignShare}/${flowShare}.`;
 
   return { overview, periods, callout };
 }
 
-export { aggregateStatistics };
+export { aggregateStatistics } from "@/lib/klaviyo/reporting";
