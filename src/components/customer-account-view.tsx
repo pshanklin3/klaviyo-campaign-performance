@@ -297,8 +297,16 @@ export function CustomerAccountView({
         );
       }
       if (body?.storage) setActiveStorage(body.storage);
-      if (body?.plan) setPlan(body.plan);
-      else setPlan((p) => ({ ...p, syncedAt: new Date().toISOString() }));
+      if (body?.plan) {
+        setPlan({
+          ...body.plan,
+          experiments: body.plan.experiments.map(ensureExperimentMetricPull),
+        });
+      } else {
+        setPlan((p) => ({ ...p, syncedAt: new Date().toISOString() }));
+      }
+      setEditing(false);
+      setShowUnlock(false);
       setStatus(
         body?.storage === "blob"
           ? "Saved to Vercel Blob."
