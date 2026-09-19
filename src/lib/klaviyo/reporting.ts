@@ -95,8 +95,8 @@ function authHeaders(): Record<string, string> {
 let valuesReportQueue: Promise<unknown> = Promise.resolve();
 let lastValuesReportAt = 0;
 const VALUES_REPORT_GAP_MS = 1100;
-const AGGREGATE_GAP_MS = 350;
-const AGGREGATE_CONCURRENCY = 3;
+const AGGREGATE_GAP_MS = 400;
+const AGGREGATE_CONCURRENCY = 2;
 let aggregateInFlight = 0;
 const aggregateWaiters: Array<() => void> = [];
 let lastAggregateAt = 0;
@@ -191,6 +191,8 @@ async function klaviyoFetchOnce<T>(
 async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const valuesReport = isValuesReportPath(path);
   const aggregate = isAggregatePath(path);
+  /** Sleep and retry in-process when the wait is short; long waits go to the client. */
+  const maxInProcessWaitMs = 12_000;
 
   const run = async (): Promise<T> => {
     if (valuesReport) {
@@ -208,24 +210,42 @@ async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
     }
 
     try {
-      // Do not sleep 40s+ inside the serverless function on 429 — surface to client.
-      const result = await klaviyoFetchOnce<T>(path, init);
-      if (valuesReport) lastValuesReportAt = Date.now();
-      if (aggregate) lastAggregateAt = Date.now();
-      if (result.ok) return result.data;
+      let attempt = 0;
+      const maxAttempts = 4;
+      while (attempt < maxAttempts) {
+        attempt += 1;
+        const result = await klaviyoFetchOnce<T>(path, init);
+        if (valuesReport) lastValuesReportAt = Date.now();
+        if (aggregate) lastAggregateAt = Date.now();
+        if (result.ok) return result.data;
 
-      if (result.status === 429) {
-        const sec = result.retryAfterMs
-          ? Math.ceil(result.retryAfterMs / 1000)
-          : 45;
+        if (result.status === 429 && attempt < maxAttempts) {
+          const waitMs = Math.max(result.retryAfterMs ?? 1000, 1000);
+          if (waitMs <= maxInProcessWaitMs) {
+            await sleep(waitMs + 250);
+            continue;
+          }
+          const sec = Math.ceil(waitMs / 1000);
+          throw new Error(
+            `Klaviyo API 429: rate limited — wait ${sec}s then retry. ${result.body.slice(0, 200)}`,
+          );
+        }
+
+        if (result.status === 429) {
+          const sec = result.retryAfterMs
+            ? Math.ceil(result.retryAfterMs / 1000)
+            : 45;
+          throw new Error(
+            `Klaviyo API 429: rate limited — wait ${sec}s then retry. ${result.body.slice(0, 200)}`,
+          );
+        }
+
         throw new Error(
-          `Klaviyo API 429: rate limited — wait ${sec}s then retry. ${result.body.slice(0, 200)}`,
+          `Klaviyo API ${result.status}: ${result.body.slice(0, 400) || "request failed"}`,
         );
       }
 
-      throw new Error(
-        `Klaviyo API ${result.status}: ${result.body.slice(0, 400) || "request failed"}`,
-      );
+      throw new Error("Klaviyo API: exhausted retries");
     } finally {
       if (aggregate) releaseAggregateSlot();
     }

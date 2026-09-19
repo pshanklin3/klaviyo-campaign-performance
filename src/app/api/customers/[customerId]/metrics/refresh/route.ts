@@ -102,22 +102,27 @@ export async function POST(request: Request, { params }: Params) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Refresh failed";
-    const rateLimited = /\b429\b|rate.?limit/i.test(message);
+    const waitMatch = message.match(/wait\s+(\d+)\s*s/i);
+    const waitSec = waitMatch ? Number(waitMatch[1]) : 0;
+    const rateLimited = /\b429\b|rate.?limit|throttled/i.test(message);
     const authFailed = /\b401\b|\b403\b|not connected|refresh token/i.test(
       message,
     );
     return NextResponse.json(
       {
         error: message,
+        retryAfterSec: waitSec || (rateLimited ? 5 : 0),
         hint: authFailed
           ? "Token may be invalid — click Reconnect Klaviyo, approve again, then Refresh."
           : rateLimited
-            ? "Klaviyo reporting is rate-limited. Wait ~30s and click Refresh metrics once."
+            ? waitSec > 0 && waitSec <= 15
+              ? `Brief rate limit — wait ${waitSec}s and Refresh will retry automatically.`
+              : `Klaviyo rate-limited. Wait ${waitSec || 45}s, then click Refresh once.`
             : "If this keeps failing, Reconnect Klaviyo and try Refresh again.",
         mode: authFailed ? "oauth_required" : undefined,
         elapsedMs: Date.now() - startedAt,
       },
-      { status: authFailed ? 401 : 500 },
+      { status: authFailed ? 401 : rateLimited ? 429 : 500 },
     );
   }
 }

@@ -479,18 +479,20 @@ export function CustomerAccountView({
         // ignore
       }
 
-      const ecomBody = await postRefresh(
+      const ecomBody = await postRefreshWithRateLimitRetry(
         `/api/customers/${plan.customerId}/metrics/refresh`,
         authPassword,
+        "Pass 1 — refreshing ecom",
       );
       applyPlan(ecomBody);
       notes.push("ecom");
 
       setStatus("Pass 2 — refreshing attributed…");
       try {
-        const attrBody = await postRefresh(
+        const attrBody = await postRefreshWithRateLimitRetry(
           `/api/customers/${plan.customerId}/metrics/refresh-attributed`,
           authPassword,
+          "Pass 2 — refreshing attributed",
         );
         applyPlan(attrBody);
         notes.push("attributed");
@@ -601,6 +603,51 @@ export function CustomerAccountView({
       }
       setRefreshing(false);
     }
+  }
+
+  async function postRefreshWithRateLimitRetry(
+    url: string,
+    authPassword: string,
+    label: string,
+    jsonBody?: Record<string, string>,
+    maxAttempts = 3,
+  ) {
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await postRefresh(url, authPassword, jsonBody);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const waitMatch = msg.match(/wait\s+(\d+)\s*s/i);
+        const expectedMatch = msg.match(
+          /Expected available in\s+(\d+)\s+seconds?/i,
+        );
+        const waitSec = waitMatch
+          ? Number(waitMatch[1])
+          : expectedMatch
+            ? Number(expectedMatch[1])
+            : /429|throttled/i.test(msg)
+              ? 5
+              : 0;
+        lastError = err instanceof Error ? err : new Error(msg);
+        if (waitSec > 0 && waitSec <= 60 && attempt < maxAttempts) {
+          const end = Date.now() + (waitSec + 1) * 1000;
+          while (Date.now() < end) {
+            const left = Math.max(1, Math.ceil((end - Date.now()) / 1000));
+            setStatus(
+              `${label} — rate limited, retrying in ${left}s (attempt ${attempt}/${maxAttempts})…`,
+            );
+            await new Promise((r) =>
+              setTimeout(r, Math.min(1000, Math.max(0, end - Date.now()))),
+            );
+          }
+          setStatus(`${label}…`);
+          continue;
+        }
+        throw lastError;
+      }
+    }
+    throw lastError ?? new Error("Refresh failed");
   }
 
   async function postRefresh(
