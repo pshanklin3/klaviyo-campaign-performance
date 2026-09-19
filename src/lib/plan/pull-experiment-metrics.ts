@@ -93,8 +93,7 @@ async function statsForWindow(
   if (
     pull.scope === "flow_message" ||
     pull.scope === "flow" ||
-    experiment.itemType === "Flow message" ||
-    experiment.itemType === "SMS"
+    experiment.itemType === "Flow message"
   ) {
     const filter = objectId
       ? pull.scope === "flow"
@@ -134,23 +133,43 @@ async function statsForWindow(
   }
 
   if (pull.scope === "campaign" || experiment.itemType === "Campaign") {
-    const filter = objectId
-      ? `equals(campaign_id,"${objectId}")`
-      : undefined;
+    const ids = objectId
+      ? objectId.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
+      : [];
+    const smsOnly =
+      /sms/i.test(pull.objectLabel ?? "") ||
+      /sms/i.test(experiment.name) ||
+      experiment.itemType === "SMS";
+    const idFilter =
+      ids.length === 1
+        ? `equals(campaign_id,"${ids[0]}")`
+        : ids.length > 1
+          ? `contains-any(campaign_id,[${ids.map((id) => `"${id}"`).join(",")}])`
+          : undefined;
+    const channelFilter = smsOnly ? 'equals(send_channel,"sms")' : undefined;
+    const filter =
+      idFilter && channelFilter
+        ? `and(${idFilter},${channelFilter})`
+        : idFilter ?? channelFilter;
     const rows = await fetchCampaignValuesReport({
       conversionMetricId,
       timeframe,
       filters: filter,
     });
     let matched = rows;
-    if (objectId) {
-      matched = rows.filter((r) => r.groupings.campaign_id === objectId);
+    if (ids.length) {
+      const idSet = new Set(ids);
+      matched = rows.filter((r) => idSet.has(r.groupings.campaign_id));
+    } else if (smsOnly) {
+      matched = rows.filter((r) => r.groupings.send_channel === "sms");
     }
     if (matched.length === 0) {
       throw new Error(
-        objectId
-          ? `No campaign report rows for ${objectId} in this window`
-          : "No matching campaign — set Klaviyo object ID (campaign id)",
+        ids.length
+          ? `No campaign report rows for ${ids.join(", ")} in this window`
+          : smsOnly
+            ? "No SMS campaign rows — check send channel filter"
+            : "No matching campaign — set Klaviyo object ID (campaign id)",
       );
     }
     return aggregateStatistics(matched.map((r) => r.statistics));

@@ -25,9 +25,14 @@ function pulledAtMs(experiment: Experiment): number {
     : 0;
 }
 
+function syncedAtMs(plan: CustomerPlan): number {
+  return plan.syncedAt ? Date.parse(plan.syncedAt) || 0 : 0;
+}
+
 /**
  * Blob holds CSM edits; git/file holds MCP-refreshed metric values.
- * Prefer newer lastPulledAt for benchmark/current fields so Cursor SSO
+ * Prefer newer lastPulledAt for experiment benchmark/current fields, and
+ * newer syncedAt for Account Overview / periods / callout so Cursor SSO
  * refreshes show up on Vercel without a private API key.
  */
 export function mergeCustomerPlans(
@@ -63,8 +68,18 @@ export function mergeCustomerPlans(
     }
   }
 
+  const preferRepoOverview = syncedAtMs(fromRepo) > syncedAtMs(edited);
+
   return {
     ...edited,
+    ...(preferRepoOverview
+      ? {
+          syncedAt: fromRepo.syncedAt,
+          callout: fromRepo.callout || edited.callout,
+          overview: fromRepo.overview,
+          periods: fromRepo.periods.length ? fromRepo.periods : edited.periods,
+        }
+      : {}),
     experiments: mergedExperiments,
   };
 }

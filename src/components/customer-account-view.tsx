@@ -621,8 +621,8 @@ export function CustomerAccountView({
                 Account Overview
               </CardTitle>
               <CardDescription>
-                Ecom + attributed revenue — read-only snapshot (not manually
-                edited)
+                Attributed revenue from Klaviyo Reporting (MCP). Ecom is
+                storefront-only and not available via Klaviyo — shown as —.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
