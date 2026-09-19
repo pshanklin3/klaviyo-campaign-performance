@@ -91,13 +91,15 @@ function authHeaders(): Record<string, string> {
   throw new Error("Missing Klaviyo auth");
 }
 
-/** Values-reports are ~1/s; metric-aggregates allow ~3/s — separate queues. */
+/** Values-reports are ~1/s; metric-aggregates allow ~3/s with limited concurrency. */
 let valuesReportQueue: Promise<unknown> = Promise.resolve();
-let aggregateQueue: Promise<unknown> = Promise.resolve();
 let lastValuesReportAt = 0;
-let lastAggregateAt = 0;
 const VALUES_REPORT_GAP_MS = 1100;
 const AGGREGATE_GAP_MS = 350;
+const AGGREGATE_CONCURRENCY = 3;
+let aggregateInFlight = 0;
+const aggregateWaiters: Array<() => void> = [];
+let lastAggregateAt = 0;
 
 let cachedConversionMetricId: string | null = null;
 
@@ -117,32 +119,67 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function acquireAggregateSlot() {
+  if (aggregateInFlight < AGGREGATE_CONCURRENCY) {
+    aggregateInFlight += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    aggregateWaiters.push(() => {
+      aggregateInFlight += 1;
+      resolve();
+    });
+  });
+}
+
+function releaseAggregateSlot() {
+  aggregateInFlight = Math.max(0, aggregateInFlight - 1);
+  const next = aggregateWaiters.shift();
+  if (next) next();
+}
+
 async function klaviyoFetchOnce<T>(
   path: string,
   init?: RequestInit,
 ): Promise<{ ok: true; data: T } | { ok: false; status: number; body: string; retryAfterMs?: number }> {
-  const response = await fetch(`${KLAVIYO_BASE}${path}`, {
-    ...init,
-    headers: {
-      ...authHeaders(),
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      revision: REVISION,
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(`${KLAVIYO_BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...authHeaders(),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        revision: REVISION,
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+    });
 
-  if (!response.ok) {
-    const body = await response.text();
-    const retryHeader = response.headers.get("Retry-After");
-    const retryAfterMs = retryHeader
-      ? Number(retryHeader) * 1000 || 15_000
-      : undefined;
-    return { ok: false, status: response.status, body, retryAfterMs };
+    if (!response.ok) {
+      const body = await response.text();
+      const retryHeader = response.headers.get("Retry-After");
+      const retryAfterMs = retryHeader
+        ? Number(retryHeader) * 1000 || 15_000
+        : undefined;
+      return { ok: false, status: response.status, body, retryAfterMs };
+    }
+
+    return { ok: true, data: (await response.json()) as T };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        ok: false,
+        status: 408,
+        body: `Klaviyo request timed out after 10s (${path})`,
+      };
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return { ok: true, data: (await response.json()) as T };
 }
 
 async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -154,33 +191,40 @@ async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
       const wait = Math.max(0, VALUES_REPORT_GAP_MS - (Date.now() - lastValuesReportAt));
       if (wait > 0) await sleep(wait);
     } else if (aggregate) {
-      const wait = Math.max(0, AGGREGATE_GAP_MS - (Date.now() - lastAggregateAt));
-      if (wait > 0) await sleep(wait);
+      await acquireAggregateSlot();
+      try {
+        const wait = Math.max(0, AGGREGATE_GAP_MS - (Date.now() - lastAggregateAt));
+        if (wait > 0) await sleep(wait);
+      } catch (error) {
+        releaseAggregateSlot();
+        throw error;
+      }
     }
 
-    let attempt = 0;
-    const maxAttempts = valuesReport ? 3 : 4;
-    while (attempt < maxAttempts) {
-      attempt += 1;
-      const result = await klaviyoFetchOnce<T>(path, init);
-      if (valuesReport) lastValuesReportAt = Date.now();
-      if (aggregate) lastAggregateAt = Date.now();
-      if (result.ok) return result.data;
+    try {
+      let attempt = 0;
+      const maxAttempts = valuesReport ? 2 : 3;
+      while (attempt < maxAttempts) {
+        attempt += 1;
+        const result = await klaviyoFetchOnce<T>(path, init);
+        if (valuesReport) lastValuesReportAt = Date.now();
+        if (aggregate) lastAggregateAt = Date.now();
+        if (result.ok) return result.data;
 
-      if (result.status === 429 && attempt < maxAttempts) {
-        // Cap waits so one refresh cannot burn the whole 60s budget on retries
-        await sleep(
-          Math.min(result.retryAfterMs ?? 8_000 * attempt, 20_000),
+        if (result.status === 429 && attempt < maxAttempts) {
+          await sleep(Math.min(result.retryAfterMs ?? 5_000 * attempt, 12_000));
+          continue;
+        }
+
+        throw new Error(
+          `Klaviyo API ${result.status}: ${result.body.slice(0, 400) || "request failed"}`,
         );
-        continue;
       }
 
-      throw new Error(
-        `Klaviyo API ${result.status}: ${result.body.slice(0, 400) || "request failed"}`,
-      );
+      throw new Error("Klaviyo API: exhausted retries");
+    } finally {
+      if (aggregate) releaseAggregateSlot();
     }
-
-    throw new Error("Klaviyo API: exhausted retries");
   };
 
   if (!valuesReport && !aggregate) {
@@ -196,12 +240,7 @@ async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
     return next;
   }
 
-  const next = aggregateQueue.then(run, run);
-  aggregateQueue = next.then(
-    () => undefined,
-    () => undefined,
-  );
-  return next;
+  return run();
 }
 
 export async function findConversionMetricId(
@@ -215,7 +254,12 @@ export async function findConversionMetricId(
     return configured;
   }
 
-  // Prefer known Placed Order ids from the plan when present (avoids wrong pick).
+  // Plan already knows Placed Order id — skip the metrics list round-trip.
+  if (hintIds[0]) {
+    cachedConversionMetricId = hintIds[0];
+    return hintIds[0];
+  }
+
   const metrics = await klaviyoFetch<{
     data: { id: string; attributes: { name: string } }[];
   }>("/metrics/?fields[metric]=name");
@@ -223,14 +267,6 @@ export async function findConversionMetricId(
   const preferred = ["Placed Order", "Ordered Product", "Checkout Started"];
   for (const name of preferred) {
     const match = metrics.data.find((m) => m.attributes.name === name);
-    if (match) {
-      cachedConversionMetricId = match.id;
-      return match.id;
-    }
-  }
-
-  for (const hint of hintIds) {
-    const match = metrics.data.find((m) => m.id === hint);
     if (match) {
       cachedConversionMetricId = match.id;
       return match.id;

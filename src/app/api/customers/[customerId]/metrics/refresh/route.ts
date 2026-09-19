@@ -1,11 +1,9 @@
 import {
   clearConversionMetricCache,
-  findConversionMetricId,
   hasKlaviyoConnection,
   resolveKlaviyoAuth,
   withKlaviyoAuth,
 } from "@/lib/klaviyo/reporting";
-import { pullAllExperimentMetrics } from "@/lib/plan/pull-experiment-metrics";
 import { pullOverviewMetrics } from "@/lib/plan/pull-overview-metrics";
 import {
   getAdminPassword,
@@ -17,14 +15,14 @@ import {
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-/** Pro plans honor up to 300s; Hobby still caps lower — finish overview first. */
 export const maxDuration = 60;
 
 type Params = { params: Promise<{ customerId: string }> };
 
 /**
- * One-click refresh via Klaviyo OAuth (preferred) or optional API key.
- * Overview is required; experiments are best-effort within a time budget.
+ * Fast refresh: ecom (metric-aggregates) only.
+ * Attributed campaign/flow reports + experiments are too slow for one
+ * serverless invocation under Klaviyo rate limits.
  */
 export async function POST(request: Request, { params }: Params) {
   const { customerId } = await params;
@@ -51,53 +49,14 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const startedAt = Date.now();
-  // Leave headroom before the platform kills the function (~60s).
-  const experimentDeadlineMs = startedAt + 45_000;
 
   try {
     clearConversionMetricCache();
     const auth = await resolveKlaviyoAuth(customerId);
 
-    const overviewPull = await withKlaviyoAuth(auth, async () => {
-      await findConversionMetricId();
-      return pullOverviewMetrics(plan);
-    });
-
-    let experiments = plan.experiments;
-    let experimentResults: {
-      id: string;
-      name: string;
-      ok: boolean;
-      detail: string;
-    }[] = [];
-
-    const remainingMs = experimentDeadlineMs - Date.now();
-    if (remainingMs > 12_000) {
-      try {
-        const experimentPull = await withKlaviyoAuth(auth, () =>
-          pullAllExperimentMetrics(plan.experiments),
-        );
-        experiments = experimentPull.experiments;
-        experimentResults = experimentPull.results;
-      } catch (experimentError) {
-        experimentResults = plan.experiments.map((e) => ({
-          id: e.id,
-          name: e.name,
-          ok: false,
-          detail:
-            experimentError instanceof Error
-              ? experimentError.message
-              : "Experiment pull failed",
-        }));
-      }
-    } else {
-      experimentResults = plan.experiments.map((e) => ({
-        id: e.id,
-        name: e.name,
-        ok: true,
-        detail: "Skipped this pass (overview saved; refresh again for experiments)",
-      }));
-    }
+    const overviewPull = await withKlaviyoAuth(auth, () =>
+      pullOverviewMetrics(plan),
+    );
 
     const syncedAt = new Date().toISOString();
     const nextPlan = {
@@ -106,7 +65,8 @@ export async function POST(request: Request, { params }: Params) {
       callout: overviewPull.callout,
       overview: overviewPull.overview,
       periods: overviewPull.periods,
-      experiments,
+      // Experiments unchanged on this fast path
+      experiments: plan.experiments,
     };
 
     const saved = await saveCustomerPlan(customerId, nextPlan);
@@ -127,7 +87,12 @@ export async function POST(request: Request, { params }: Params) {
       mode: auth.type === "oauth" ? "oauth" : "api_key",
       storage: saved.storage,
       plan: fresh ?? nextPlan,
-      results: experimentResults,
+      results: plan.experiments.map((e) => ({
+        id: e.id,
+        name: e.name,
+        ok: true,
+        detail: "Unchanged (ecom-only refresh)",
+      })),
       elapsedMs: Date.now() - startedAt,
       passwordHint:
         process.env.NODE_ENV === "production"

@@ -508,10 +508,16 @@ export function CustomerAccountView({
       const failed =
         body?.results?.filter((r) => !r.ok).map((r) => r.name) ?? [];
       const okCount = body?.results?.filter((r) => r.ok).length ?? 0;
+      const ecomOnly =
+        body?.results?.every((r) =>
+          /ecom-only|unchanged/i.test(r.detail),
+        ) ?? false;
       setStatus(
-        failed.length
-          ? `Refreshed overview; experiments: ${okCount} ok, failed: ${failed.join(", ")}`
-          : `Refreshed overview and ${okCount} experiment metric(s) from Klaviyo.`,
+        ecomOnly
+          ? "Refreshed ecom from Klaviyo. Attributed & experiments kept from last pull."
+          : failed.length
+            ? `Refreshed overview; experiments: ${okCount} ok, failed: ${failed.join(", ")}`
+            : `Refreshed overview and ${okCount} experiment metric(s) from Klaviyo.`,
       );
       try {
         sessionStorage.removeItem("csm-admin-password");

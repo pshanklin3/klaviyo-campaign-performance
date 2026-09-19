@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "src/app/api/customers/[customerId]/metrics/refresh/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
