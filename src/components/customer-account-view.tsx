@@ -79,6 +79,49 @@ function Delta({ value, suffix = "" }: { value: number; suffix?: string }) {
   );
 }
 
+function ExperimentMetricCard({
+  metricLabel,
+  benchmarkValue,
+  benchmarkNote,
+  currentValue,
+  currentNote,
+  deltaPct,
+}: {
+  metricLabel: string;
+  benchmarkValue: string;
+  benchmarkNote: string;
+  currentValue: string;
+  currentNote: string;
+  deltaPct: number;
+}) {
+  return (
+    <div className="grid w-full shrink-0 grid-cols-2 gap-x-3 gap-y-1 rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--panel)]/80 p-3 sm:w-[17.5rem]">
+      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
+        Benchmark
+      </p>
+      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
+        Current
+      </p>
+      <p className="font-heading text-xl font-semibold leading-none tabular-nums text-[color:var(--ink)]">
+        {benchmarkValue || "—"}
+      </p>
+      <p className="font-heading text-xl font-semibold leading-none tabular-nums text-[color:var(--ink)]">
+        {currentValue || "—"}
+      </p>
+      <p className="min-h-[2.5rem] text-xs leading-snug text-[color:var(--ink-muted)]">
+        {metricLabel} · {benchmarkNote}
+      </p>
+      <p className="min-h-[2.5rem] text-xs leading-snug text-[color:var(--ink-muted)]">
+        {currentNote}
+      </p>
+      <div className="h-5" aria-hidden />
+      <div className="flex h-5 items-center text-sm">
+        <Delta value={deltaPct} suffix="%" />
+      </div>
+    </div>
+  );
+}
+
 function ShareBar({
   leftLabel,
   rightLabel,
@@ -677,9 +720,9 @@ export function CustomerAccountView({
                   In motion · performance experiments
                 </CardTitle>
                 <CardDescription>
-                  Editable: what changed. Benchmark / current come from the
-                  metric pull (flow message, campaign, or aggregate) around the
-                  change date.
+                  Names, goals, and changes are CSM-edited. Benchmark / current
+                  numbers are placeholders until Klaviyo metric pull is wired —
+                  not live account data yet.
                   {editing
                     ? " Use Add experiment / Delete on each card, then Save."
                     : " Click Edit to add or remove experiments."}
@@ -1188,33 +1231,14 @@ export function CustomerAccountView({
                           </>
                         )}
                       </div>
-                      <div className="grid min-w-[220px] grid-cols-2 gap-3 rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--panel)]/80 p-3">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
-                            Benchmark
-                          </p>
-                          <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
-                            {item.benchmarkValue || "—"}
-                          </p>
-                          <p className="text-xs text-[color:var(--ink-muted)]">
-                            {item.metricLabel} · {item.benchmarkNote}
-                          </p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
-                            Current
-                          </p>
-                          <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
-                            {item.currentValue || "—"}
-                          </p>
-                          <p className="text-xs text-[color:var(--ink-muted)]">
-                            {item.currentNote}
-                          </p>
-                          <div className="mt-1 text-sm">
-                            <Delta value={item.deltaPct} suffix="%" />
-                          </div>
-                        </div>
-                      </div>
+                      <ExperimentMetricCard
+                        metricLabel={item.metricLabel}
+                        benchmarkValue={item.benchmarkValue}
+                        benchmarkNote={item.benchmarkNote}
+                        currentValue={item.currentValue}
+                        currentNote={item.currentNote}
+                        deltaPct={item.deltaPct}
+                      />
                     </div>
                   </div>
                   );
