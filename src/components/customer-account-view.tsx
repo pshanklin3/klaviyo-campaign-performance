@@ -108,77 +108,22 @@ function formatSyncedAt(value: string) {
   }
 }
 
-function MetricCard({
-  metric,
-  editing,
-  onChange,
-}: {
-  metric: OverviewMetric;
-  editing: boolean;
-  onChange?: (patch: Partial<OverviewMetric>) => void;
-}) {
+function MetricCard({ metric }: { metric: OverviewMetric }) {
   return (
     <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
-      {editing ? (
-        <input
-          className={inputClass}
-          value={metric.label}
-          onChange={(e) => onChange?.({ label: e.target.value })}
-        />
-      ) : (
-        <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
-          {metric.label}
-        </p>
-      )}
-      {editing ? (
-        <input
-          className={`${inputClass} mt-2 font-heading text-2xl font-semibold`}
-          value={metric.value}
-          onChange={(e) => onChange?.({ value: e.target.value })}
-        />
-      ) : (
-        <p className="mt-2 font-heading text-3xl font-semibold tabular-nums text-[color:var(--ink)] sm:text-4xl">
-          {metric.value}
-        </p>
-      )}
+      <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
+        {metric.label}
+      </p>
+      <p className="mt-2 font-heading text-3xl font-semibold tabular-nums text-[color:var(--ink)] sm:text-4xl">
+        {metric.value}
+      </p>
       <div className="mt-2 flex flex-wrap gap-3 text-sm">
-        {editing ? (
-          <>
-            <label className="flex items-center gap-1 text-xs">
-              prior %
-              <input
-                type="number"
-                step="0.1"
-                className={`${inputClass} w-20`}
-                value={metric.priorDeltaPct}
-                onChange={(e) =>
-                  onChange?.({ priorDeltaPct: Number(e.target.value) || 0 })
-                }
-              />
-            </label>
-            <label className="flex items-center gap-1 text-xs">
-              YoY %
-              <input
-                type="number"
-                step="0.1"
-                className={`${inputClass} w-20`}
-                value={metric.yoyDeltaPct}
-                onChange={(e) =>
-                  onChange?.({ yoyDeltaPct: Number(e.target.value) || 0 })
-                }
-              />
-            </label>
-          </>
-        ) : (
-          <>
-            <span>
-              vs prior <Delta value={metric.priorDeltaPct} suffix="%" />
-            </span>
-            <span>
-              YoY <Delta value={metric.yoyDeltaPct} suffix="%" />
-            </span>
-          </>
-        )}
+        <span>
+          vs prior <Delta value={metric.priorDeltaPct} suffix="%" />
+        </span>
+        <span>
+          YoY <Delta value={metric.yoyDeltaPct} suffix="%" />
+        </span>
       </div>
     </div>
   );
@@ -209,28 +154,6 @@ export function CustomerAccountView({
   const { overview } = plan;
 
   const exportJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
-
-  function patchOverview(
-    key: keyof CustomerPlan["overview"],
-    patch: Partial<OverviewMetric> | number,
-  ) {
-    setPlan((p) => {
-      if (key === "emailSharePct" || key === "campaignSharePct") {
-        return {
-          ...p,
-          overview: { ...p.overview, [key]: patch as number },
-        };
-      }
-      const current = p.overview[key] as OverviewMetric;
-      return {
-        ...p,
-        overview: {
-          ...p.overview,
-          [key]: { ...current, ...(patch as Partial<OverviewMetric>) },
-        },
-      };
-    });
-  }
 
   function updateExperiment(id: string, patch: Partial<Experiment>) {
     setPlan((p) => ({
@@ -372,8 +295,8 @@ export function CustomerAccountView({
             </h1>
           )}
           <p className="max-w-2xl text-sm text-[color:var(--ink-soft)]">
-            Account health + success plan. Click Edit to change fields on this
-            page, then Save.
+            Account health + success plan. Metrics stay read-only; Edit unlocks
+            callouts, experiments, goals, tasks, and meeting notes.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -482,7 +405,7 @@ export function CustomerAccountView({
       {editing ? (
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-2xl border border-[color:var(--panel-border)] bg-[color:var(--panel)]/95 px-4 py-3 backdrop-blur">
           <p className="mr-auto text-sm text-[color:var(--ink-soft)]">
-            Editing on this page · Save writes to{" "}
+            Editing success-plan fields · metrics stay locked · Save writes to{" "}
             {activeStorage === "blob" ? "Vercel Blob" : "plan.json"}
           </p>
           <Button
@@ -522,33 +445,16 @@ export function CustomerAccountView({
                 Account Overview
               </CardTitle>
               <CardDescription>
-                Ecom + attributed revenue — featured windows only
+                Ecom + attributed revenue — read-only snapshot (not manually
+                edited)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard
-                  metric={overview.ecomL30}
-                  editing={editing}
-                  onChange={(patch) => patchOverview("ecomL30", patch)}
-                />
-                <MetricCard
-                  metric={overview.ecomYesterday}
-                  editing={editing}
-                  onChange={(patch) => patchOverview("ecomYesterday", patch)}
-                />
-                <MetricCard
-                  metric={overview.attributedL30}
-                  editing={editing}
-                  onChange={(patch) => patchOverview("attributedL30", patch)}
-                />
-                <MetricCard
-                  metric={overview.attributedYesterday}
-                  editing={editing}
-                  onChange={(patch) =>
-                    patchOverview("attributedYesterday", patch)
-                  }
-                />
+                <MetricCard metric={overview.ecomL30} />
+                <MetricCard metric={overview.ecomYesterday} />
+                <MetricCard metric={overview.attributedL30} />
+                <MetricCard metric={overview.attributedYesterday} />
               </div>
 
               <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
@@ -561,55 +467,29 @@ export function CustomerAccountView({
                       <p className="text-xs text-[color:var(--ink-muted)]">
                         Ecom
                       </p>
-                      {editing ? (
-                        <input
-                          className={inputClass}
-                          value={overview.ecomL7.value}
-                          onChange={(e) =>
-                            patchOverview("ecomL7", { value: e.target.value })
-                          }
+                      <p className="font-heading text-2xl font-semibold tabular-nums">
+                        {overview.ecomL7.value}
+                      </p>
+                      <div className="mt-1 text-sm">
+                        <Delta
+                          value={overview.ecomL7.priorDeltaPct}
+                          suffix="%"
                         />
-                      ) : (
-                        <p className="font-heading text-2xl font-semibold tabular-nums">
-                          {overview.ecomL7.value}
-                        </p>
-                      )}
-                      {!editing ? (
-                        <div className="mt-1 text-sm">
-                          <Delta
-                            value={overview.ecomL7.priorDeltaPct}
-                            suffix="%"
-                          />
-                        </div>
-                      ) : null}
+                      </div>
                     </div>
                     <div>
                       <p className="text-xs text-[color:var(--ink-muted)]">
                         Attributed
                       </p>
-                      {editing ? (
-                        <input
-                          className={inputClass}
-                          value={overview.attributedL7.value}
-                          onChange={(e) =>
-                            patchOverview("attributedL7", {
-                              value: e.target.value,
-                            })
-                          }
+                      <p className="font-heading text-2xl font-semibold tabular-nums">
+                        {overview.attributedL7.value}
+                      </p>
+                      <div className="mt-1 text-sm">
+                        <Delta
+                          value={overview.attributedL7.priorDeltaPct}
+                          suffix="%"
                         />
-                      ) : (
-                        <p className="font-heading text-2xl font-semibold tabular-nums">
-                          {overview.attributedL7.value}
-                        </p>
-                      )}
-                      {!editing ? (
-                        <div className="mt-1 text-sm">
-                          <Delta
-                            value={overview.attributedL7.priorDeltaPct}
-                            suffix="%"
-                          />
-                        </div>
-                      ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -638,59 +518,21 @@ export function CustomerAccountView({
                   <p className="mb-3 text-sm font-medium text-[color:var(--ink)]">
                     Channel mix · L30 attributed revenue
                   </p>
-                  {editing ? (
-                    <label className="flex items-center gap-2 text-sm">
-                      Email %
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className={`${inputClass} w-24`}
-                        value={overview.emailSharePct}
-                        onChange={(e) =>
-                          patchOverview(
-                            "emailSharePct",
-                            Number(e.target.value) || 0,
-                          )
-                        }
-                      />
-                    </label>
-                  ) : (
-                    <ShareBar
-                      leftLabel="Email"
-                      rightLabel="SMS"
-                      leftPct={overview.emailSharePct}
-                    />
-                  )}
+                  <ShareBar
+                    leftLabel="Email"
+                    rightLabel="SMS"
+                    leftPct={overview.emailSharePct}
+                  />
                 </div>
                 <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
                   <p className="mb-3 text-sm font-medium text-[color:var(--ink)]">
                     Engine mix · L30 attributed revenue
                   </p>
-                  {editing ? (
-                    <label className="flex items-center gap-2 text-sm">
-                      Campaigns %
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        className={`${inputClass} w-24`}
-                        value={overview.campaignSharePct}
-                        onChange={(e) =>
-                          patchOverview(
-                            "campaignSharePct",
-                            Number(e.target.value) || 0,
-                          )
-                        }
-                      />
-                    </label>
-                  ) : (
-                    <ShareBar
-                      leftLabel="Campaigns"
-                      rightLabel="Flows"
-                      leftPct={overview.campaignSharePct}
-                    />
-                  )}
+                  <ShareBar
+                    leftLabel="Campaigns"
+                    rightLabel="Flows"
+                    leftPct={overview.campaignSharePct}
+                  />
                 </div>
               </div>
 
@@ -725,156 +567,34 @@ export function CustomerAccountView({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {plan.periods.map((row, idx) => (
+                      {plan.periods.map((row) => (
                         <TableRow key={row.window}>
                           <TableCell>{row.window}</TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {editing ? (
-                              <input
-                                className={`${inputClass} text-right`}
-                                value={row.ecom}
-                                onChange={(e) =>
-                                  setPlan((p) => ({
-                                    ...p,
-                                    periods: p.periods.map((r, i) =>
-                                      i === idx
-                                        ? { ...r, ecom: e.target.value }
-                                        : r,
-                                    ),
-                                  }))
-                                }
-                              />
-                            ) : (
-                              row.ecom
-                            )}
+                            {row.ecom}
                           </TableCell>
                           <TableCell className="text-right">
-                            {editing ? (
-                              <input
-                                type="number"
-                                step="0.1"
-                                className={`${inputClass} text-right`}
-                                value={row.ecomPriorPct}
-                                onChange={(e) =>
-                                  setPlan((p) => ({
-                                    ...p,
-                                    periods: p.periods.map((r, i) =>
-                                      i === idx
-                                        ? {
-                                            ...r,
-                                            ecomPriorPct:
-                                              Number(e.target.value) || 0,
-                                          }
-                                        : r,
-                                    ),
-                                  }))
-                                }
-                              />
-                            ) : row.ecomPriorPct === 0 ? (
+                            {row.ecomPriorPct === 0 ? (
                               "—"
                             ) : (
                               <Delta value={row.ecomPriorPct} suffix="%" />
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            {editing ? (
-                              <input
-                                type="number"
-                                step="0.1"
-                                className={`${inputClass} text-right`}
-                                value={row.ecomYoyPct}
-                                onChange={(e) =>
-                                  setPlan((p) => ({
-                                    ...p,
-                                    periods: p.periods.map((r, i) =>
-                                      i === idx
-                                        ? {
-                                            ...r,
-                                            ecomYoyPct:
-                                              Number(e.target.value) || 0,
-                                          }
-                                        : r,
-                                    ),
-                                  }))
-                                }
-                              />
-                            ) : (
-                              <Delta value={row.ecomYoyPct} suffix="%" />
-                            )}
+                            <Delta value={row.ecomYoyPct} suffix="%" />
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {editing ? (
-                              <input
-                                className={`${inputClass} text-right`}
-                                value={row.attributed}
-                                onChange={(e) =>
-                                  setPlan((p) => ({
-                                    ...p,
-                                    periods: p.periods.map((r, i) =>
-                                      i === idx
-                                        ? { ...r, attributed: e.target.value }
-                                        : r,
-                                    ),
-                                  }))
-                                }
-                              />
-                            ) : (
-                              row.attributed
-                            )}
+                            {row.attributed}
                           </TableCell>
                           <TableCell className="text-right">
-                            {editing ? (
-                              <input
-                                type="number"
-                                step="0.1"
-                                className={`${inputClass} text-right`}
-                                value={row.attrPriorPct}
-                                onChange={(e) =>
-                                  setPlan((p) => ({
-                                    ...p,
-                                    periods: p.periods.map((r, i) =>
-                                      i === idx
-                                        ? {
-                                            ...r,
-                                            attrPriorPct:
-                                              Number(e.target.value) || 0,
-                                          }
-                                        : r,
-                                    ),
-                                  }))
-                                }
-                              />
-                            ) : row.attrPriorPct === 0 ? (
+                            {row.attrPriorPct === 0 ? (
                               "—"
                             ) : (
                               <Delta value={row.attrPriorPct} suffix="%" />
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            {editing ? (
-                              <input
-                                type="number"
-                                step="0.1"
-                                className={`${inputClass} text-right`}
-                                value={row.attrYoyPct}
-                                onChange={(e) =>
-                                  setPlan((p) => ({
-                                    ...p,
-                                    periods: p.periods.map((r, i) =>
-                                      i === idx
-                                        ? {
-                                            ...r,
-                                            attrYoyPct:
-                                              Number(e.target.value) || 0,
-                                          }
-                                        : r,
-                                    ),
-                                  }))
-                                }
-                              />
-                            ) : (
-                              <Delta value={row.attrYoyPct} suffix="%" />
-                            )}
+                            <Delta value={row.attrYoyPct} suffix="%" />
                           </TableCell>
                         </TableRow>
                       ))}
