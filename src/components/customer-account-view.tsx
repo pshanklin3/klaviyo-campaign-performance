@@ -209,6 +209,9 @@ export function CustomerAccountView({
   const [showUnlock, setShowUnlock] = useState(startEditing);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importJson, setImportJson] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeStorage, setActiveStorage] = useState(storageMode);
@@ -341,10 +344,9 @@ export function CustomerAccountView({
         );
       }
       if (body?.mode === "mcp") {
+        setShowImport(true);
         setStatus(
-          body.hint ||
-            body.message ||
-            "Ask Claude/Cursor to refresh via Klaviyo MCP, then POST /api/customers/…/metrics/ingest.",
+          "Ask Claude for the metrics JSON (Klaviyo MCP), then paste it below and click Apply.",
         );
         return;
       }
@@ -366,6 +368,81 @@ export function CustomerAccountView({
       setError(err instanceof Error ? err.message : "Refresh failed");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function applyImportedMetrics() {
+    if (!password.trim()) {
+      setError("Enter the CSM password to import metrics.");
+      return;
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(importJson);
+    } catch {
+      setError("Paste valid JSON from Claude (the metrics ingest body).");
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const response = await fetch(
+        `/api/customers/${plan.customerId}/metrics/ingest`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csm-admin-password": password,
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        hint?: string;
+        plan?: CustomerPlan;
+        updated?: {
+          overview?: boolean;
+          experiments?: string[];
+          periods?: string[];
+          callout?: boolean;
+        };
+        storage?: "blob" | "file";
+      } | null;
+      if (!response.ok) {
+        throw new Error(
+          [body?.error, body?.hint].filter(Boolean).join(" — ") ||
+            "Import failed",
+        );
+      }
+      if (body?.plan) {
+        setPlan({
+          ...body.plan,
+          experiments: body.plan.experiments.map(ensureExperimentMetricPull),
+        });
+      }
+      if (body?.storage) setActiveStorage(body.storage);
+      const parts = [
+        body?.updated?.overview ? "overview" : null,
+        body?.updated?.experiments?.length
+          ? `${body.updated.experiments.length} experiment(s)`
+          : null,
+        body?.updated?.periods?.length
+          ? `${body.updated.periods.length} period(s)`
+          : null,
+      ].filter(Boolean);
+      setStatus(
+        parts.length
+          ? `Imported ${parts.join(", ")} from Claude / MCP.`
+          : "Metrics imported.",
+      );
+      setImportJson("");
+      setShowImport(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -507,7 +584,23 @@ export function CustomerAccountView({
                 size="sm"
                 variant="outline"
                 className="rounded-full"
-                disabled={refreshing || saving}
+                disabled={refreshing || saving || importing}
+                onClick={() => {
+                  setShowImport(true);
+                  setError(null);
+                  setStatus(
+                    "Paste the JSON Claude gave you, then click Apply metrics.",
+                  );
+                }}
+              >
+                Import metrics
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                disabled={refreshing || saving || importing}
                 onClick={() => void refreshMetrics()}
               >
                 {refreshing ? "Refreshing…" : "How to refresh"}
@@ -574,6 +667,52 @@ export function CustomerAccountView({
             >
               Cancel
             </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {editing && showImport ? (
+        <Card className="border-[color:var(--panel-border)] bg-[color:var(--panel)]/90">
+          <CardHeader className="pb-2">
+            <CardTitle className="font-heading text-lg">
+              Import metrics from Claude
+            </CardTitle>
+            <CardDescription>
+              Ask Claude (with Klaviyo MCP) for the metrics JSON only — no
+              password. Paste it here and click Apply. Numbers update on this
+              page immediately.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <textarea
+              className={`${inputClass} min-h-40 font-mono text-xs`}
+              placeholder='{ "overview": { … }, "experiments": [ … ] }'
+              value={importJson}
+              onChange={(e) => setImportJson(e.target.value)}
+              spellCheck={false}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                className="rounded-full"
+                disabled={importing || !importJson.trim()}
+                onClick={() => void applyImportedMetrics()}
+              >
+                {importing ? "Applying…" : "Apply metrics"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-full"
+                disabled={importing}
+                onClick={() => {
+                  setShowImport(false);
+                  setImportJson("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -788,10 +927,9 @@ export function CustomerAccountView({
                   In motion · performance experiments
                 </CardTitle>
                 <CardDescription>
-                  Names, goals, and changes are CSM-edited. Benchmark / current
-                  come from Klaviyo MCP (Claude or Cursor) via metrics ingest —
-                  no private API key. Say “Refresh Drake metrics” in the agent,
-                  or POST to `/api/customers/…/metrics/ingest`.
+                  Names, goals, and changes are CSM-edited. To refresh numbers:
+                  ask Claude (Klaviyo MCP) for metrics JSON → Edit → Import
+                  metrics → paste → Apply. No terminal or private API key.
                   {editing
                     ? " Add / Delete experiments, then Save."
                     : " Click Edit to add or remove experiments."}

@@ -40,11 +40,29 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 
 Benchmark / current values are refreshed by an agent using **Klaviyo MCP** — not a private API key on Vercel.
 
-### Option A — Metrics ingest API (Claude or Cursor)
+### Option A — Claude → paste in the app (recommended for CSMs)
+
+1. Connect **Klaviyo MCP** in Claude (SSO).
+2. Ask Claude for metrics JSON only (no password):
+
+```
+Use Klaviyo MCP for hunter-trading / Drake Waterfowl.
+GET https://YOUR-APP.vercel.app/api/customers/hunter-trading/metrics/ingest
+for schema + experiment ids.
+Pull last_30_days, prior 30d, L7, yesterday campaign + flow reports (Placed Order).
+Compute overview + experiment before/after metrics.
+Output ONLY the finished JSON body — do not POST, do not use passwords/tokens.
+```
+
+3. On the live site: **Edit** → unlock with CSM password → **Import metrics** → paste Claude’s JSON → **Apply metrics**.
+
+Numbers update immediately (saved to Blob). No terminal.
+
+### Option B — Metrics ingest API (curl / agents that may POST)
 
 1. Connect **Klaviyo MCP** in Claude Desktop / Claude Code / Cursor (SSO).
 2. Pull campaign + flow reports (Placed Order conversion metric).
-3. POST the computed numbers to the app (no git push):
+3. POST the computed numbers (or paste via Option A):
 
 ```bash
 # Schema + experiment ids
@@ -54,21 +72,7 @@ curl -s http://127.0.0.1:43147/api/customers/hunter-trading/metrics/ingest | jq 
 curl -s -X POST http://127.0.0.1:43147/api/customers/hunter-trading/metrics/ingest \
   -H "Content-Type: application/json" \
   -H "x-csm-admin-password: $CSM_ADMIN_PASSWORD" \
-  -d '{
-    "overview": {
-      "attributedL30": { "value": "$658K", "priorDeltaPct": 41.5, "yoyDeltaPct": 0 },
-      "emailSharePct": 63,
-      "campaignSharePct": 61
-    },
-    "experiments": [
-      {
-        "id": "exp-sms-campaigns",
-        "benchmarkValue": "2.30%",
-        "currentValue": "2.60%",
-        "deltaPct": 12.8
-      }
-    ]
-  }'
+  -d @payload.json
 ```
 
 Auth headers (any one):
@@ -96,11 +100,11 @@ Each experiment needs `objectId` (flow message / campaign id) and `changedOn` fo
 
 ```
 Connect to Klaviyo MCP. For Drake Waterfowl (hunter-trading):
-1. GET /api/customers/hunter-trading/metrics/ingest for experiment ids + schema
+1. GET /api/customers/hunter-trading/metrics/ingest on the live app for experiment ids + schema
 2. Pull last_30_days (+ prior 30d) campaign and flow reports with Placed Order
 3. Compute attributed totals, email/SMS share, campaign/flow share, and experiment before/after metrics
-4. POST the JSON to /api/customers/hunter-trading/metrics/ingest with x-csm-admin-password (or METRICS_INGEST_TOKEN)
-Do not use a Klaviyo private API key.
+4. Output ONLY the finished JSON body — do not POST and do not use any password or token
+The CSM will paste that JSON into the app (Edit → Import metrics → Apply).
 ```
 
 ## Run locally
