@@ -37,6 +37,7 @@ import {
   defaultMetricPull,
   describeMetricWindows,
   ensureExperimentMetricPull,
+  presetMeta,
   pullDisplayLabel,
 } from "@/lib/plan/experiment-metrics";
 import {
@@ -1030,7 +1031,7 @@ export function CustomerAccountView({
                                               : pull.goalMetricLabel,
                                         });
                                       }}
-                                      placeholder="Metric name"
+                                      placeholder="Event metric name (e.g. Clicked Email)"
                                     />
                                     <input
                                       className={inputClass}
@@ -1050,7 +1051,7 @@ export function CustomerAccountView({
                                           metrics,
                                         });
                                       }}
-                                      placeholder="Klaviyo metric id (optional)"
+                                      placeholder="Event metric ID (Clicked… — not click rate)"
                                     />
                                     {pull.metrics.length > 1 ? (
                                       <Button
@@ -1079,9 +1080,10 @@ export function CustomerAccountView({
                                   )?.hint
                                 }{" "}
                                 · Windows: {windows.benchmark} →{" "}
-                                {windows.current}. Presets are shortcuts —
-                                any Klaviyo metric or aggregate can be the
-                                goal.
+                                {windows.current}.
+                                {presetMeta(pull.preset)?.derived
+                                  ? ` “${pullDisplayLabel(pull)}” is derived — use the underlying event metric ID (${presetMeta(pull.preset)?.eventHints.join(" / ")}), not a rate ID.`
+                                  : " Paste a Klaviyo event metric ID when you have one; rates like click rate have none."}
                               </p>
                               <label className="flex items-center gap-2 text-xs text-[color:var(--ink-soft)]">
                                 <input

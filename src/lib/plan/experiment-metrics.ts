@@ -76,36 +76,83 @@ export const METRIC_COMBINE_OPTIONS: {
   { value: "custom", label: "Custom formula" },
 ];
 
-/** Common shortcuts only — not an exhaustive catalog. */
+/** Common shortcuts only — not an exhaustive catalog.
+ *  Rates (click rate, open rate, …) are derived — they have no Klaviyo metric ID.
+ *  Paste the underlying *event* metric ID (Clicked Email, Opened Email, …).
+ */
 export const METRIC_PRESET_OPTIONS: {
   value: string;
   label: string;
   format: "percent" | "currency" | "number";
+  /** True when the card shows a rate/ratio computed from event metrics. */
+  derived: boolean;
+  /** Suggested underlying event metric label(s) for the ID field. */
+  eventHints: string[];
 }[] = [
-  { value: "click_rate", label: "Click rate", format: "percent" },
-  { value: "open_rate", label: "Open rate", format: "percent" },
-  { value: "placed_order_rate", label: "Placed order rate", format: "percent" },
+  {
+    value: "click_rate",
+    label: "Click rate",
+    format: "percent",
+    derived: true,
+    eventHints: ["Clicked Email", "Clicked SMS"],
+  },
+  {
+    value: "open_rate",
+    label: "Open rate",
+    format: "percent",
+    derived: true,
+    eventHints: ["Opened Email"],
+  },
+  {
+    value: "placed_order_rate",
+    label: "Placed order rate",
+    format: "percent",
+    derived: true,
+    eventHints: ["Placed Order"],
+  },
   {
     value: "attributed_revenue",
     label: "Attributed revenue",
     format: "currency",
+    derived: false,
+    eventHints: ["Placed Order"],
   },
   {
     value: "revenue_per_recipient",
     label: "Revenue / recipient",
     format: "currency",
+    derived: true,
+    eventHints: ["Placed Order"],
   },
-  { value: "recipients", label: "Recipients", format: "number" },
+  {
+    value: "recipients",
+    label: "Recipients",
+    format: "number",
+    derived: false,
+    eventHints: ["Received Email", "Received SMS"],
+  },
   {
     value: "unsubscribe_rate",
     label: "Unsubscribe rate",
     format: "percent",
+    derived: true,
+    eventHints: ["Unsubscribed"],
   },
-  { value: "custom", label: "Custom metric / aggregate…", format: "number" },
+  {
+    value: "custom",
+    label: "Custom metric / aggregate…",
+    format: "number",
+    derived: false,
+    eventHints: [],
+  },
 ];
 
 export function presetLabel(preset: string): string {
   return METRIC_PRESET_OPTIONS.find((o) => o.value === preset)?.label ?? preset;
+}
+
+export function presetMeta(preset: string) {
+  return METRIC_PRESET_OPTIONS.find((o) => o.value === preset);
 }
 
 export function pullDisplayLabel(pull: ExperimentMetricPull): string {
@@ -124,11 +171,14 @@ function refsFromPreset(preset: string): {
       combine: "custom",
     };
   }
-  const label = presetLabel(preset);
+  const meta = presetMeta(preset);
+  const label = meta?.label ?? preset;
+  // For derived rates, the ref is the underlying *event* (Click), not "Click rate".
+  const eventLabel = meta?.eventHints[0] ?? label;
   return {
     label,
-    metrics: [{ label }],
-    combine: "single",
+    metrics: [{ label: eventLabel }],
+    combine: meta?.derived ? "custom" : "single",
   };
 }
 
@@ -249,12 +299,16 @@ export function applyPresetToPull(
     };
   }
   const fromPreset = refsFromPreset(preset);
+  const meta = presetMeta(preset);
   return {
     ...pull,
     preset,
     goalMetricLabel: fromPreset.label,
     metrics: fromPreset.metrics,
     combine: fromPreset.combine,
+    combineNote: meta?.derived
+      ? `${fromPreset.label} = ${meta.eventHints.join(" / ")} ÷ recipients (derived — paste the Click/Open/… event metric ID, not a rate ID)`
+      : pull.combineNote ?? "",
   };
 }
 

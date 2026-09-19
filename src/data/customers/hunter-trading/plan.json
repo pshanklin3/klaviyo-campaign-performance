@@ -141,11 +141,12 @@
         "goalMetricLabel": "Click rate",
         "metrics": [
           {
-            "label": "Click rate"
+            "label": "Clicked Email",
+            "metricId": ""
           }
         ],
-        "combine": "single",
-        "combineNote": "",
+        "combine": "custom",
+        "combineNote": "Click rate derived from Clicked Email \u00f7 recipients \u2014 paste the Clicked Email metric ID",
         "objectId": "",
         "objectLabel": "Browse Abandon \u00b7 Email 2",
         "benchmarkDays": 30,
@@ -172,11 +173,12 @@
         "goalMetricLabel": "Revenue / recipient",
         "metrics": [
           {
-            "label": "Revenue / recipient"
+            "label": "Placed Order",
+            "metricId": ""
           }
         ],
-        "combine": "single",
-        "combineNote": "",
+        "combine": "custom",
+        "combineNote": "Revenue / recipient derived from Placed Order \u00f7 recipients \u2014 paste the Placed Order metric ID",
         "objectId": "",
         "objectLabel": "Welcome Series \u00b7 SMS 1",
         "benchmarkDays": 30,
@@ -203,11 +205,12 @@
         "goalMetricLabel": "Click rate",
         "metrics": [
           {
-            "label": "Click rate"
+            "label": "Clicked Email",
+            "metricId": ""
           }
         ],
-        "combine": "single",
-        "combineNote": "",
+        "combine": "custom",
+        "combineNote": "Click rate derived from Clicked Email \u00f7 recipients \u2014 paste the Clicked Email metric ID",
         "objectId": "",
         "objectLabel": "VIP early access \u00b7 Fall drop",
         "benchmarkDays": 30,
