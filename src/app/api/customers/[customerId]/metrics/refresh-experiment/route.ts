@@ -147,7 +147,7 @@ export async function POST(request: Request, { params }: Params) {
       storage: saved.storage,
       plan: fresh ?? nextPlan,
       // Values-reports allow ~2/min — leave a full minute for the next pass
-      nextWaitSec: 45,
+      nextWaitSec: 60,
       elapsedMs: Date.now() - startedAt,
       passwordHint:
         process.env.NODE_ENV === "production"

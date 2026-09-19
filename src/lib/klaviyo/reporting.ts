@@ -339,11 +339,13 @@ export function windowBounds(
 ): { benchmarkStart: string; benchmarkEnd: string; currentStart: string; currentEnd: string } {
   const change = parseISO(`${changedOn}T00:00:00Z`);
   const benchStart = subDays(change, benchmarkDays);
+  // Klaviyo custom timeframes prefer second-precision UTC without ms
+  const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
   return {
-    benchmarkStart: formatISO(benchStart),
-    benchmarkEnd: formatISO(change),
-    currentStart: formatISO(change),
-    currentEnd: formatISO(now),
+    benchmarkStart: iso(benchStart),
+    benchmarkEnd: iso(change),
+    currentStart: iso(change),
+    currentEnd: iso(now),
   };
 }
 

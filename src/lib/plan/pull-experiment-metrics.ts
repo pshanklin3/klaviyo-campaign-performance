@@ -136,47 +136,63 @@ async function statsForWindow(
   }
 
   if (pull.scope === "campaign" || experiment.itemType === "Campaign") {
-    const ids = objectId
+    // Campaign IDs are long (e.g. 01M0…); short ids like Hf9L38 are metric ids — ignore.
+    const rawIds = objectId
       ? objectId.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
       : [];
+    const ids = rawIds.filter(
+      (id) => id.length >= 10 || /^01[A-Z0-9]/i.test(id),
+    );
     const smsOnly =
       /sms/i.test(pull.objectLabel ?? "") ||
       /sms/i.test(experiment.name) ||
       experiment.itemType === "SMS";
-    const idFilter =
-      ids.length === 1
-        ? `equals(campaign_id,"${ids[0]}")`
-        : ids.length > 1
-          ? `contains-any(campaign_id,[${ids.map((id) => `"${id}"`).join(",")}])`
-          : undefined;
-    const channelFilter = smsOnly ? 'equals(send_channel,"sms")' : undefined;
-    const filter =
-      idFilter && channelFilter
-        ? `and(${idFilter},${channelFilter})`
-        : idFilter ?? channelFilter;
+
+    // Prefer channel filter only — contains-any with many IDs often returns empty.
+    // Match campaign IDs client-side after the report returns.
+    const filter = smsOnly ? 'equals(send_channel,"sms")' : undefined;
     const rows = await fetchCampaignValuesReport({
       conversionMetricId,
       timeframe,
       filters: filter,
       includeValueStats: needsValueStats,
     });
+
     let matched = rows;
+    let matchNote = "";
     if (ids.length) {
       const idSet = new Set(ids);
-      matched = rows.filter((r) => idSet.has(r.groupings.campaign_id));
+      const byId = rows.filter((r) => idSet.has(r.groupings.campaign_id));
+      if (byId.length > 0) {
+        matched = byId;
+        matchNote = `${byId.length}/${ids.length} campaign ids matched`;
+      } else if (smsOnly && rows.length > 0) {
+        // Cohort ids may be stale — fall back to all SMS in the window
+        matched = rows.filter((r) => r.groupings.send_channel === "sms");
+        matchNote = `campaign ids not in window; used ${matched.length} SMS campaign row(s)`;
+      } else {
+        matched = [];
+      }
     } else if (smsOnly) {
       matched = rows.filter((r) => r.groupings.send_channel === "sms");
     }
+
     if (matched.length === 0) {
       throw new Error(
         ids.length
-          ? `No campaign report rows for ${ids.join(", ")} in this window`
+          ? `No campaign report rows for ${ids.slice(0, 3).join(", ")}${ids.length > 3 ? "…" : ""} in this window (${rows.length} total rows returned)`
           : smsOnly
-            ? "No SMS campaign rows — check send channel filter"
+            ? "No SMS campaign rows in this window"
             : "No matching campaign — set Klaviyo object ID (campaign id)",
       );
     }
-    return aggregateStatistics(matched.map((r) => r.statistics));
+
+    const stats = aggregateStatistics(matched.map((r) => r.statistics));
+    if (matchNote) {
+      (stats as ReportStatistics & { _matchNote?: string })._matchNote =
+        matchNote;
+    }
+    return stats;
   }
 
   // Account / custom / aggregate
@@ -251,6 +267,9 @@ export async function pullExperimentMetrics(
 
     const bench = formatStat(inferredPreset || preset, benchmarkStats);
     const curr = formatStat(inferredPreset || preset, currentStats);
+    const matchNote =
+      (currentStats as ReportStatistics & { _matchNote?: string })._matchNote ||
+      (benchmarkStats as ReportStatistics & { _matchNote?: string })._matchNote;
 
     return {
       ok: true,
@@ -263,7 +282,9 @@ export async function pullExperimentMetrics(
         deltaPct: Number(deltaPct(bench.numeric, curr.numeric).toFixed(1)),
         lastPulledAt: new Date().toISOString(),
       },
-      detail: `Pulled via Klaviyo Reporting API (${pull.scope})`,
+      detail: matchNote
+        ? `Pulled via Klaviyo Reporting API (${pull.scope}); ${matchNote}`
+        : `Pulled via Klaviyo Reporting API (${pull.scope})`,
     };
   } catch (error) {
     return {

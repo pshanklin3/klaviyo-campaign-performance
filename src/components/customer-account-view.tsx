@@ -509,8 +509,8 @@ export function CustomerAccountView({
           const exp = autoExperiments[i];
           const waitSec =
             i === 0
-              ? (attrBody.nextWaitSec ?? 45)
-              : 45;
+              ? (attrBody.nextWaitSec ?? 60)
+              : 60;
           await waitCountdown(
             waitSec,
             `Pass ${3 + i}/${totalPasses} — next: ${exp.name}`,
@@ -543,12 +543,13 @@ export function CustomerAccountView({
               : expectedMatch
                 ? Number(expectedMatch[1])
                 : /429|throttled/i.test(msg)
-                  ? 45
+                  ? 60
                   : 0;
 
-            if (retrySec > 0) {
+            // Allow up to 2 minutes — values-reports often ask for ~45–60s
+            if (retrySec > 0 && retrySec <= 120) {
               await waitCountdown(
-                retrySec + 2,
+                retrySec + 3,
                 `Retrying ${exp.name} after rate limit`,
               );
               setStatus(`Retrying ${exp.name}…`);
@@ -559,6 +560,9 @@ export function CustomerAccountView({
                   { experimentId: exp.id },
                 );
                 applyPlan(retryBody);
+                if (retryBody.ok === false || retryBody.error) {
+                  throw new Error(retryBody.error || "retry failed");
+                }
                 expOk += 1;
                 notes.push(exp.name);
                 continue;
