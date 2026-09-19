@@ -1,20 +1,20 @@
 {
   "customerId": "hunter-trading",
   "displayName": "Drake Waterfowl",
-  "syncedAt": "2026-09-19T03:50:00.000Z",
-  "callout": "Live Klaviyo attributed revenue L30 is $658K (+41.5% vs prior 30d). Email/SMS mix 63/37; campaigns/flows 61/39. SMS campaign aggregate click rate is up (2.30% → 2.60%). Welcome SMS #1 rev/recipient still soft since Sep 11.",
+  "syncedAt": "2026-09-19T04:30:00.000Z",
+  "callout": "Live Klaviyo ecom (Placed Order) L30 is $2.04M (+41.9% vs prior 30d); attributed $658K (+41.5% ). Email/SMS mix 63/37; campaigns/flows 61/39.",
   "overview": {
     "ecomL30": {
-      "value": "—",
-      "priorDeltaPct": 0,
-      "yoyDeltaPct": 0,
-      "label": "Ecom revenue · last 30 days (not in Klaviyo)"
+      "label": "Ecom revenue · last 30 days",
+      "value": "$2.04M",
+      "priorDeltaPct": 41.9,
+      "yoyDeltaPct": 0
     },
     "ecomYesterday": {
-      "value": "—",
-      "priorDeltaPct": 0,
-      "yoyDeltaPct": 0,
-      "label": "Ecom revenue · yesterday (not in Klaviyo)"
+      "label": "Ecom revenue · yesterday",
+      "value": "$87K",
+      "priorDeltaPct": 56.0,
+      "yoyDeltaPct": 0
     },
     "attributedL30": {
       "label": "Attributed revenue · last 30 days",
@@ -29,10 +29,10 @@
       "yoyDeltaPct": 0
     },
     "ecomL7": {
-      "value": "—",
-      "priorDeltaPct": 0,
-      "yoyDeltaPct": 0,
-      "label": "Ecom · last 7 days (not in Klaviyo)"
+      "label": "Ecom · last 7 days",
+      "value": "$443K",
+      "priorDeltaPct": -10.4,
+      "yoyDeltaPct": 0
     },
     "attributedL7": {
       "label": "Attributed · last 7 days",
@@ -46,8 +46,8 @@
   "periods": [
     {
       "window": "Yesterday",
-      "ecom": "—",
-      "ecomPriorPct": 0,
+      "ecom": "$87K",
+      "ecomPriorPct": 56.0,
       "ecomYoyPct": 0,
       "attributed": "$18.3K",
       "attrPriorPct": 107.9,
@@ -55,8 +55,8 @@
     },
     {
       "window": "Last 7 days",
-      "ecom": "—",
-      "ecomPriorPct": 0,
+      "ecom": "$443K",
+      "ecomPriorPct": -10.4,
       "ecomYoyPct": 0,
       "attributed": "$132K",
       "attrPriorPct": -6.9,
@@ -73,8 +73,8 @@
     },
     {
       "window": "Last 30 days",
-      "ecom": "—",
-      "ecomPriorPct": 0,
+      "ecom": "$2.04M",
+      "ecomPriorPct": 41.9,
       "ecomYoyPct": 0,
       "attributed": "$658K",
       "attrPriorPct": 41.5,

@@ -4,6 +4,7 @@ import {
   fetchFlowValuesReport,
   findConversionMetricId,
   hasKlaviyoApiKey,
+  queryMetricSumValue,
   type CampaignReportRow,
   type FlowReportRow,
   type ReportStatistics,
@@ -92,7 +93,19 @@ function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Pull Account Overview attributed metrics from Klaviyo Reporting API. */
+function rangeSum(
+  metricId: string,
+  start: Date,
+  endExclusive: Date,
+): Promise<number> {
+  return queryMetricSumValue({
+    metricId,
+    startIso: `${isoDay(start)}T00:00:00`,
+    endIsoExclusive: `${isoDay(endExclusive)}T00:00:00`,
+  });
+}
+
+/** Pull Account Overview: total Placed Order (ecom) + attributed campaign/flow. */
 export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   overview: CustomerPlan["overview"];
   periods: PeriodRow[];
@@ -106,20 +119,27 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
 
   const conversionMetricId = await findConversionMetricId();
   const now = new Date();
+  const today = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
 
-  // Same weekday last week for yesterday prior (UTC day windows).
-  const yday = new Date(now);
+  const yday = new Date(today);
   yday.setUTCDate(yday.getUTCDate() - 1);
-  const ydayPrior = new Date(yday);
-  ydayPrior.setUTCDate(ydayPrior.getUTCDate() - 7);
+  const ydayEnd = today;
+  const ydayWeekAgo = new Date(yday);
+  ydayWeekAgo.setUTCDate(ydayWeekAgo.getUTCDate() - 7);
+  const ydayWeekAgoEnd = new Date(ydayWeekAgo);
+  ydayWeekAgoEnd.setUTCDate(ydayWeekAgoEnd.getUTCDate() + 1);
 
-  const priorL7End = new Date(now);
-  priorL7End.setUTCDate(priorL7End.getUTCDate() - 7);
+  const l7Start = new Date(today);
+  l7Start.setUTCDate(l7Start.getUTCDate() - 7);
+  const priorL7End = l7Start;
   const priorL7Start = new Date(priorL7End);
   priorL7Start.setUTCDate(priorL7Start.getUTCDate() - 7);
 
-  const priorL30End = new Date(now);
-  priorL30End.setUTCDate(priorL30End.getUTCDate() - 30);
+  const l30Start = new Date(today);
+  l30Start.setUTCDate(l30Start.getUTCDate() - 30);
+  const priorL30End = l30Start;
   const priorL30Start = new Date(priorL30End);
   priorL30Start.setUTCDate(priorL30Start.getUTCDate() - 30);
 
@@ -127,17 +147,17 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   );
   const priorMtdEnd = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59),
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0),
   );
   const priorMtdStart = new Date(
     Date.UTC(priorMtdEnd.getUTCFullYear(), priorMtdEnd.getUTCMonth(), 1),
   );
   const dayOfMonth = now.getUTCDate();
-  const priorMtdSameDay = new Date(
+  const priorMtdSameDayEnd = new Date(
     Date.UTC(
       priorMtdStart.getUTCFullYear(),
       priorMtdStart.getUTCMonth(),
-      Math.min(dayOfMonth, priorMtdEnd.getUTCDate()),
+      Math.min(dayOfMonth, priorMtdEnd.getUTCDate()) + 1,
     ),
   );
 
@@ -147,9 +167,17 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     l7,
     prior7,
     yesterday,
-    ydayWeekAgo,
+    ydayWeekAgoAttr,
     mtd,
     priorMtd,
+    ecomL30,
+    ecomPrior30,
+    ecomL7,
+    ecomPrior7,
+    ecomYday,
+    ecomYdayPrior,
+    ecomMtd,
+    ecomPriorMtd,
   ] = await Promise.all([
     attributedFor(conversionMetricId, { key: "last_30_days" }),
     attributedFor(conversionMetricId, {
@@ -163,14 +191,22 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     }),
     attributedFor(conversionMetricId, { key: "yesterday" }),
     attributedFor(conversionMetricId, {
-      start: `${isoDay(ydayPrior)}T00:00:00Z`,
-      end: `${isoDay(yday)}T00:00:00Z`,
+      start: `${isoDay(ydayWeekAgo)}T00:00:00Z`,
+      end: `${isoDay(ydayWeekAgoEnd)}T00:00:00Z`,
     }),
     attributedFor(conversionMetricId, { key: "this_month" }),
     attributedFor(conversionMetricId, {
       start: `${isoDay(priorMtdStart)}T00:00:00Z`,
-      end: `${isoDay(priorMtdSameDay)}T00:00:00Z`,
+      end: `${isoDay(priorMtdSameDayEnd)}T00:00:00Z`,
     }),
+    rangeSum(conversionMetricId, l30Start, today),
+    rangeSum(conversionMetricId, priorL30Start, priorL30End),
+    rangeSum(conversionMetricId, l7Start, today),
+    rangeSum(conversionMetricId, priorL7Start, priorL7End),
+    rangeSum(conversionMetricId, yday, ydayEnd),
+    rangeSum(conversionMetricId, ydayWeekAgo, ydayWeekAgoEnd),
+    rangeSum(conversionMetricId, mtdStart, today),
+    rangeSum(conversionMetricId, priorMtdStart, priorMtdSameDayEnd),
   ]);
 
   const emailShare =
@@ -181,27 +217,9 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   const flowShare = 100 - campaignShare;
 
   const overview: CustomerPlan["overview"] = {
-    ecomL30: {
-      ...plan.overview.ecomL30,
-      value: "—",
-      priorDeltaPct: 0,
-      yoyDeltaPct: 0,
-      label: "Ecom revenue · last 30 days (not in Klaviyo)",
-    },
-    ecomYesterday: {
-      ...plan.overview.ecomYesterday,
-      value: "—",
-      priorDeltaPct: 0,
-      yoyDeltaPct: 0,
-      label: "Ecom revenue · yesterday (not in Klaviyo)",
-    },
-    ecomL7: {
-      ...plan.overview.ecomL7,
-      value: "—",
-      priorDeltaPct: 0,
-      yoyDeltaPct: 0,
-      label: "Ecom · last 7 days (not in Klaviyo)",
-    },
+    ecomL30: metric("Ecom revenue · last 30 days", ecomL30, ecomPrior30),
+    ecomYesterday: metric("Ecom revenue · yesterday", ecomYday, ecomYdayPrior),
+    ecomL7: metric("Ecom · last 7 days", ecomL7, ecomPrior7),
     attributedL30: metric(
       "Attributed revenue · last 30 days",
       l30.total,
@@ -210,7 +228,7 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     attributedYesterday: metric(
       "Attributed revenue · yesterday",
       yesterday.total,
-      ydayWeekAgo.total,
+      ydayWeekAgoAttr.total,
     ),
     attributedL7: metric(
       "Attributed · last 7 days",
@@ -223,54 +241,56 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
 
   const period = (
     window: string,
+    ecom: number,
+    ecomPrior: number,
     attributed: number,
-    prior: number,
+    attrPrior: number,
   ): PeriodRow => ({
     window,
-    ecom: "—",
-    ecomPriorPct: 0,
+    ecom: formatMoney(ecom),
+    ecomPriorPct: pctDelta(ecom, ecomPrior),
     ecomYoyPct: 0,
     attributed: formatMoney(attributed),
-    attrPriorPct: pctDelta(attributed, prior),
+    attrPriorPct: pctDelta(attributed, attrPrior),
     attrYoyPct: 0,
   });
 
   const periods: PeriodRow[] = [
-    period("Yesterday", yesterday.total, ydayWeekAgo.total),
-    period("Last 7 days", l7.total, prior7.total),
-    period("MTD", mtd.total, priorMtd.total),
-    period("Last 30 days", l30.total, prior30.total),
+    period(
+      "Yesterday",
+      ecomYday,
+      ecomYdayPrior,
+      yesterday.total,
+      ydayWeekAgoAttr.total,
+    ),
+    period("Last 7 days", ecomL7, ecomPrior7, l7.total, prior7.total),
+    period("MTD", ecomMtd, ecomPriorMtd, mtd.total, priorMtd.total),
+    period("Last 30 days", ecomL30, ecomPrior30, l30.total, prior30.total),
   ];
 
   for (const window of ["QTD", "Last quarter", "YTD"]) {
     const existing = plan.periods.find((p) => p.window === window);
     periods.push(
-      existing
-        ? {
-            ...existing,
-            ecom: "—",
-            ecomPriorPct: 0,
-            ecomYoyPct: 0,
-          }
-        : {
-            window,
-            ecom: "—",
-            ecomPriorPct: 0,
-            ecomYoyPct: 0,
-            attributed: "—",
-            attrPriorPct: 0,
-            attrYoyPct: 0,
-          },
+      existing ?? {
+        window,
+        ecom: "—",
+        ecomPriorPct: 0,
+        ecomYoyPct: 0,
+        attributed: "—",
+        attrPriorPct: 0,
+        attrYoyPct: 0,
+      },
     );
   }
 
   const callout =
-    `Live Klaviyo attributed revenue L30 is ${formatMoney(l30.total)} ` +
-    `(${pctDelta(l30.total, prior30.total) >= 0 ? "+" : ""}${pctDelta(l30.total, prior30.total)}% vs prior 30d). ` +
+    `Live Klaviyo ecom (Placed Order) L30 is ${formatMoney(ecomL30)} ` +
+    `(${pctDelta(ecomL30, ecomPrior30) >= 0 ? "+" : ""}${pctDelta(ecomL30, ecomPrior30)}% vs prior 30d); ` +
+    `attributed ${formatMoney(l30.total)} ` +
+    `(${pctDelta(l30.total, prior30.total) >= 0 ? "+" : ""}${pctDelta(l30.total, prior30.total)}%). ` +
     `Email/SMS mix ${emailShare}/${smsShare}; campaigns/flows ${campaignShare}/${flowShare}.`;
 
   return { overview, periods, callout };
 }
 
-/** Lightweight check used by UI/API before kicking off a long pull. */
 export { aggregateStatistics };

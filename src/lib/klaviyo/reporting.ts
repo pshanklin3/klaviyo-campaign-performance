@@ -269,3 +269,46 @@ export function aggregateStatistics(rows: ReportStatistics[]): ReportStatistics 
     recipients > 0 ? conversionValue / recipients : 0;
   return merged;
 }
+
+/**
+ * Total metric value (e.g. all Placed Order revenue) by event time.
+ * Use for store / ecom totals — not campaign/flow attributed revenue.
+ */
+export async function queryMetricSumValue(options: {
+  metricId: string;
+  startIso: string;
+  endIsoExclusive: string;
+  timezone?: string;
+}): Promise<number> {
+  const start = options.startIso.replace(/\.\d+Z$/, "").replace(/Z$/, "");
+  const end = options.endIsoExclusive.replace(/\.\d+Z$/, "").replace(/Z$/, "");
+  const payload = {
+    data: {
+      type: "metric-aggregate",
+      attributes: {
+        metric_id: options.metricId,
+        measurements: ["sum_value"],
+        interval: "day",
+        timezone: options.timezone ?? "UTC",
+        filter: [
+          `greater-or-equal(datetime,${start})`,
+          `less-than(datetime,${end})`,
+        ],
+      },
+    },
+  };
+
+  const report = await klaviyoFetch<{
+    data: {
+      attributes: {
+        data: { measurements: { sum_value?: number[] } }[];
+      };
+    };
+  }>("/metric-aggregates/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  const series = report.data.attributes.data?.[0]?.measurements?.sum_value ?? [];
+  return series.reduce((sum, n) => sum + (n ?? 0), 0);
+}

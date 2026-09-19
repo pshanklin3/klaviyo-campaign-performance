@@ -852,8 +852,8 @@ export function CustomerAccountView({
                 Account Overview
               </CardTitle>
               <CardDescription>
-                Attributed revenue from Klaviyo Reporting (MCP). Storefront
-                ecom is not available here.
+                Ecom = total Placed Order revenue in Klaviyo. Attributed =
+                campaign + flow revenue from Reporting.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
