@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "async_hooks";
-import { formatISO, parseISO, subDays } from "date-fns";
+import { parseISO, subDays } from "date-fns";
 import { getValidAccessToken } from "@/lib/klaviyo/oauth";
 
 const KLAVIYO_BASE = "https://a.klaviyo.com/api";

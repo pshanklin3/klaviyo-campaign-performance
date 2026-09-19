@@ -5,7 +5,10 @@ import {
   withKlaviyoAuth,
 } from "@/lib/klaviyo/reporting";
 import { ensureExperimentMetricPull } from "@/lib/plan/experiment-metrics";
-import { pullExperimentMetrics } from "@/lib/plan/pull-experiment-metrics";
+import {
+  pullExperimentMetrics,
+  type ExperimentPullPhase,
+} from "@/lib/plan/pull-experiment-metrics";
 import {
   getAdminPassword,
   getCustomerPlan,
@@ -21,9 +24,8 @@ export const maxDuration = 60;
 type Params = { params: Promise<{ customerId: string }> };
 
 /**
- * Pass 3+: refresh a single experiment.
- * Call once per experiment with ~45s client-side waits between calls
- * (Klaviyo values-reports are ~2/minute).
+ * One experiment window per request (benchmark OR current).
+ * Client must wait ~60s between calls — values-reports are ~2/min.
  */
 export async function POST(request: Request, { params }: Params) {
   const { customerId } = await params;
@@ -34,8 +36,11 @@ export async function POST(request: Request, { params }: Params) {
 
   const body = (await request.json().catch(() => null)) as {
     experimentId?: string;
+    phase?: ExperimentPullPhase;
   } | null;
   const experimentId = body?.experimentId?.trim();
+  const phase: ExperimentPullPhase =
+    body?.phase === "benchmark" ? "benchmark" : "current";
   if (!experimentId) {
     return NextResponse.json(
       { error: "experimentId is required" },
@@ -79,6 +84,7 @@ export async function POST(request: Request, { params }: Params) {
         ok: true,
         pass: "experiment",
         experimentId,
+        phase,
         skipped: true,
         detail: "Skipped (manual values)",
         plan,
@@ -87,7 +93,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     const pulled = await withKlaviyoAuth(auth, () =>
-      pullExperimentMetrics(normalized),
+      pullExperimentMetrics(normalized, phase),
     );
 
     if (!pulled.ok) {
@@ -100,13 +106,14 @@ export async function POST(request: Request, { params }: Params) {
         : expectedMatch
           ? Number(expectedMatch[1])
           : /429|throttled|rate.?limit/i.test(pulled.error)
-            ? 45
+            ? 60
             : 0;
       return NextResponse.json(
         {
           ok: false,
           pass: "experiment",
           experimentId,
+          phase,
           name: normalized.name,
           error: pulled.error,
           retryAfterSec,
@@ -142,11 +149,11 @@ export async function POST(request: Request, { params }: Params) {
       mode: auth.type === "oauth" ? "oauth" : "api_key",
       pass: "experiment",
       experimentId,
+      phase,
       name: normalized.name,
       detail: pulled.detail ?? "Updated",
       storage: saved.storage,
       plan: fresh ?? nextPlan,
-      // Values-reports allow ~2/min — leave a full minute for the next pass
       nextWaitSec: 60,
       elapsedMs: Date.now() - startedAt,
       passwordHint:
@@ -166,17 +173,18 @@ export async function POST(request: Request, { params }: Params) {
       : expectedMatch
         ? Number(expectedMatch[1])
         : /429|throttled|rate.?limit/i.test(message)
-          ? 45
+          ? 60
           : 0;
     return NextResponse.json(
       {
         error: message,
         pass: "experiment",
         experimentId,
+        phase,
         retryAfterSec,
         hint:
           retryAfterSec > 0
-            ? `Wait ${retryAfterSec}s for Klaviyo rate limits, then retry this experiment.`
+            ? `Wait ${retryAfterSec}s for Klaviyo rate limits, then retry.`
             : "Try Refresh again.",
         elapsedMs: Date.now() - startedAt,
       },

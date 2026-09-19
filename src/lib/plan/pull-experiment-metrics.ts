@@ -79,6 +79,137 @@ function deltaPct(benchmark: number | null, current: number | null): number {
   return ((current - benchmark) / Math.abs(benchmark)) * 100;
 }
 
+/** Parse display values like "2.28%" or "$33.63" back to numbers for delta. */
+function parseDisplayStat(display: string | undefined): number | null {
+  if (!display || display === "—") return null;
+  const cleaned = display.replace(/[$,\s]/g, "").trim();
+  if (cleaned.endsWith("%")) {
+    const n = Number(cleaned.slice(0, -1));
+    return Number.isFinite(n) ? n : null;
+  }
+  const n = Number(cleaned.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function inferPreset(experiment: Experiment): string {
+  const pull = ensureExperimentMetricPull(experiment).metricPull;
+  if (pull.preset !== "custom") return pull.preset;
+  const label = pull.goalMetricLabel.toLowerCase();
+  if (
+    label.includes("revenue /") ||
+    label.includes("rev /") ||
+    label.includes("per recipient")
+  ) {
+    return "revenue_per_recipient";
+  }
+  if (label.includes("attributed") || label.includes("revenue")) {
+    return "attributed_revenue";
+  }
+  if (label.includes("open")) return "open_rate";
+  if (label.includes("unsub")) return "unsubscribe_rate";
+  if (label.includes("click")) return "click_rate";
+  return "click_rate";
+}
+
+export type ExperimentPullPhase = "benchmark" | "current";
+
+/**
+ * Pull one window per call — Klaviyo values-reports are ~2/min, so benchmark
+ * and current must be separate HTTP passes with a client wait between them.
+ */
+export async function pullExperimentMetrics(
+  experiment: Experiment,
+  phase: ExperimentPullPhase = "current",
+): Promise<PullExperimentResult> {
+  try {
+    await findConversionMetricId();
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Klaviyo not connected — use Connect Klaviyo (OAuth).",
+    };
+  }
+
+  const normalized = ensureExperimentMetricPull(experiment);
+  const pull = normalized.metricPull;
+  if (!pull.autoPull) {
+    return { ok: false, error: "Auto-pull is off for this experiment" };
+  }
+
+  try {
+    const conversionMetricId = await findConversionMetricId();
+    const bounds = windowBounds(normalized.changedOn, pull.benchmarkDays);
+    const windows = describeMetricWindows(normalized);
+    const preset = inferPreset(normalized);
+
+    if (phase === "benchmark") {
+      const benchmarkStats = await statsForWindow(
+        normalized,
+        bounds.benchmarkStart,
+        bounds.benchmarkEnd,
+        conversionMetricId,
+      );
+      const bench = formatStat(preset, benchmarkStats);
+      const currentNumeric = parseDisplayStat(normalized.currentValue);
+      const matchNote = (
+        benchmarkStats as ReportStatistics & { _matchNote?: string }
+      )._matchNote;
+
+      return {
+        ok: true,
+        values: {
+          metricLabel: pull.goalMetricLabel || normalized.metricLabel,
+          benchmarkValue: bench.display,
+          benchmarkNote: windows.benchmark,
+          currentValue: normalized.currentValue,
+          currentNote: normalized.currentNote,
+          deltaPct: Number(deltaPct(bench.numeric, currentNumeric).toFixed(1)),
+          lastPulledAt: new Date().toISOString(),
+        },
+        detail: matchNote
+          ? `Benchmark via Reporting API (${pull.scope}); ${matchNote}`
+          : `Benchmark via Reporting API (${pull.scope})`,
+      };
+    }
+
+    const currentStats = await statsForWindow(
+      normalized,
+      bounds.currentStart,
+      bounds.currentEnd,
+      conversionMetricId,
+    );
+    const curr = formatStat(preset, currentStats);
+    const benchNumeric = parseDisplayStat(normalized.benchmarkValue);
+    const matchNote = (
+      currentStats as ReportStatistics & { _matchNote?: string }
+    )._matchNote;
+
+    return {
+      ok: true,
+      values: {
+        metricLabel: pull.goalMetricLabel || normalized.metricLabel,
+        benchmarkValue: normalized.benchmarkValue,
+        benchmarkNote: normalized.benchmarkNote,
+        currentValue: curr.display,
+        currentNote: windows.current,
+        deltaPct: Number(deltaPct(benchNumeric, curr.numeric).toFixed(1)),
+        lastPulledAt: new Date().toISOString(),
+      },
+      detail: matchNote
+        ? `Current via Reporting API (${pull.scope}); ${matchNote}`
+        : `Current via Reporting API (${pull.scope})`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Pull failed",
+    };
+  }
+}
+
 async function statsForWindow(
   experiment: Experiment,
   startIso: string,
@@ -207,93 +338,6 @@ async function statsForWindow(
   return aggregateStatistics(rows.map((r) => r.statistics));
 }
 
-export async function pullExperimentMetrics(
-  experiment: Experiment,
-): Promise<PullExperimentResult> {
-  // Auth comes from withKlaviyoAuth (OAuth) or env API key fallback inside klaviyoFetch.
-  try {
-    // Auth + conversion metric come from the shared cache / withKlaviyoAuth.
-    await findConversionMetricId();
-  } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Klaviyo not connected — use Connect Klaviyo (OAuth).",
-    };
-  }
-
-  const normalized = ensureExperimentMetricPull(experiment);
-  const pull = normalized.metricPull;
-  if (!pull.autoPull) {
-    return { ok: false, error: "Auto-pull is off for this experiment" };
-  }
-
-  try {
-    const conversionMetricId = await findConversionMetricId();
-    const bounds = windowBounds(normalized.changedOn, pull.benchmarkDays);
-    const windows = describeMetricWindows(normalized);
-
-    const benchmarkStats = await statsForWindow(
-      normalized,
-      bounds.benchmarkStart,
-      bounds.benchmarkEnd,
-      conversionMetricId,
-    );
-    const currentStats = await statsForWindow(
-      normalized,
-      bounds.currentStart,
-      bounds.currentEnd,
-      conversionMetricId,
-    );
-
-    const preset = pull.preset === "custom" ? "click_rate" : pull.preset;
-    // For custom labels that look like revenue/click, infer from goal label
-    const inferredPreset = (() => {
-      if (pull.preset !== "custom") return pull.preset;
-      const label = pull.goalMetricLabel.toLowerCase();
-      if (label.includes("revenue /") || label.includes("rev /") || label.includes("per recipient")) {
-        return "revenue_per_recipient";
-      }
-      if (label.includes("attributed") || label.includes("revenue")) {
-        return "attributed_revenue";
-      }
-      if (label.includes("open")) return "open_rate";
-      if (label.includes("unsub")) return "unsubscribe_rate";
-      if (label.includes("click")) return "click_rate";
-      return "click_rate";
-    })();
-
-    const bench = formatStat(inferredPreset || preset, benchmarkStats);
-    const curr = formatStat(inferredPreset || preset, currentStats);
-    const matchNote =
-      (currentStats as ReportStatistics & { _matchNote?: string })._matchNote ||
-      (benchmarkStats as ReportStatistics & { _matchNote?: string })._matchNote;
-
-    return {
-      ok: true,
-      values: {
-        metricLabel: pull.goalMetricLabel || normalized.metricLabel,
-        benchmarkValue: bench.display,
-        benchmarkNote: windows.benchmark,
-        currentValue: curr.display,
-        currentNote: windows.current,
-        deltaPct: Number(deltaPct(bench.numeric, curr.numeric).toFixed(1)),
-        lastPulledAt: new Date().toISOString(),
-      },
-      detail: matchNote
-        ? `Pulled via Klaviyo Reporting API (${pull.scope}); ${matchNote}`
-        : `Pulled via Klaviyo Reporting API (${pull.scope})`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Pull failed",
-    };
-  }
-}
-
 export async function pullAllExperimentMetrics(
   experiments: Experiment[],
 ): Promise<{
@@ -317,27 +361,40 @@ export async function pullAllExperimentMetrics(
       continue;
     }
 
-    const pulled = await pullExperimentMetrics(normalized);
-    if (!pulled.ok) {
+    // One window at a time — callers that need both should wait between phases
+    const bench = await pullExperimentMetrics(normalized, "benchmark");
+    if (!bench.ok) {
       next.push(normalized);
       results.push({
         id: normalized.id,
         name: normalized.name,
         ok: false,
-        detail: pulled.error,
+        detail: bench.error,
+      });
+      continue;
+    }
+    const afterBench = { ...normalized, ...bench.values };
+    const curr = await pullExperimentMetrics(afterBench, "current");
+    if (!curr.ok) {
+      next.push(afterBench);
+      results.push({
+        id: normalized.id,
+        name: normalized.name,
+        ok: false,
+        detail: curr.error,
       });
       continue;
     }
 
     next.push({
-      ...normalized,
-      ...pulled.values,
+      ...afterBench,
+      ...curr.values,
     });
     results.push({
       id: normalized.id,
       name: normalized.name,
       ok: true,
-      detail: pulled.detail ?? "Updated",
+      detail: curr.detail ?? "Updated",
     });
   }
 

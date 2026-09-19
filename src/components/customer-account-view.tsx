@@ -503,34 +503,38 @@ export function CustomerAccountView({
         const autoExperiments = experiments.filter(
           (e) => e.metricPull.autoPull,
         );
-        const totalPasses = 2 + autoExperiments.length;
+        // Each experiment = 2 phases (benchmark + current), 1 report call each
+        const totalPasses = 2 + autoExperiments.length * 2;
+        let passNum = 3;
 
-        for (let i = 0; i < autoExperiments.length; i++) {
-          const exp = autoExperiments[i];
-          const waitSec =
-            i === 0
-              ? (attrBody.nextWaitSec ?? 60)
-              : 60;
+        const runExperimentPhase = async (
+          exp: (typeof autoExperiments)[0],
+          phase: "benchmark" | "current",
+          waitSec: number,
+        ) => {
           await waitCountdown(
             waitSec,
-            `Pass ${3 + i}/${totalPasses} — next: ${exp.name}`,
+            `Pass ${passNum}/${totalPasses} — next: ${exp.name} (${phase})`,
           );
           setStatus(
-            `Pass ${3 + i}/${totalPasses} — refreshing ${exp.name}…`,
+            `Pass ${passNum}/${totalPasses} — ${exp.name} · ${phase}…`,
           );
+          passNum += 1;
 
-          try {
-            const expBody = await postRefresh(
+          const doCall = () =>
+            postRefresh(
               `/api/customers/${plan.customerId}/metrics/refresh-experiment`,
               authPassword,
-              { experimentId: exp.id },
+              { experimentId: exp.id, phase },
             );
+
+          try {
+            const expBody = await doCall();
             applyPlan(expBody);
             if (expBody.ok === false || expBody.error) {
               throw new Error(expBody.error || "Experiment refresh failed");
             }
-            expOk += 1;
-            notes.push(exp.name);
+            return true;
           } catch (expErr) {
             const msg =
               expErr instanceof Error ? expErr.message : "failed";
@@ -546,35 +550,48 @@ export function CustomerAccountView({
                   ? 60
                   : 0;
 
-            // Allow up to 2 minutes — values-reports often ask for ~45–60s
             if (retrySec > 0 && retrySec <= 120) {
               await waitCountdown(
                 retrySec + 3,
-                `Retrying ${exp.name} after rate limit`,
+                `Retrying ${exp.name} (${phase}) after rate limit`,
               );
-              setStatus(`Retrying ${exp.name}…`);
+              setStatus(`Retrying ${exp.name} · ${phase}…`);
               try {
-                const retryBody = await postRefresh(
-                  `/api/customers/${plan.customerId}/metrics/refresh-experiment`,
-                  authPassword,
-                  { experimentId: exp.id },
-                );
+                const retryBody = await doCall();
                 applyPlan(retryBody);
                 if (retryBody.ok === false || retryBody.error) {
                   throw new Error(retryBody.error || "retry failed");
                 }
-                expOk += 1;
-                notes.push(exp.name);
-                continue;
+                return true;
               } catch (retryErr) {
                 expFailures.push(
-                  `${exp.name}: ${retryErr instanceof Error ? retryErr.message : "failed"}`,
+                  `${exp.name} (${phase}): ${retryErr instanceof Error ? retryErr.message : "failed"}`,
                 );
-                continue;
+                return false;
               }
             }
 
-            expFailures.push(`${exp.name}: ${msg}`);
+            expFailures.push(`${exp.name} (${phase}): ${msg}`);
+            return false;
+          }
+        };
+
+        for (let i = 0; i < autoExperiments.length; i++) {
+          const exp = autoExperiments[i];
+          const firstWait =
+            i === 0 && passNum === 3
+              ? (attrBody.nextWaitSec ?? 60)
+              : 60;
+          const benchOk = await runExperimentPhase(
+            exp,
+            "benchmark",
+            firstWait,
+          );
+          if (!benchOk) continue;
+          await runExperimentPhase(exp, "current", 60);
+          if (!expFailures.some((f) => f.startsWith(`${exp.name} (`))) {
+            expOk += 1;
+            notes.push(exp.name);
           }
         }
       } catch (attrErr) {
