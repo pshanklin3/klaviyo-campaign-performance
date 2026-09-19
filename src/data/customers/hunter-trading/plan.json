@@ -1,7 +1,7 @@
 {
   "customerId": "hunter-trading",
   "displayName": "Drake Waterfowl",
-  "syncedAt": "2026-09-19T03:24:40.000Z",
+  "syncedAt": "2026-09-19T03:28:43.000Z",
   "callout": "Welcome SMS #1 rev/recipient is soft since Sep 11 ($33.71 vs $39.09 benchmark). Browse Abandon Email #1 click rate is up (1.80% \u2192 2.28%). Metric cards now include live Klaviyo Reporting pulls where object IDs are set.",
   "overview": {
     "ecomL30": {
@@ -134,7 +134,7 @@
       "benchmarkNote": "30d before 2026-09-08",
       "currentValue": "2.28%",
       "currentNote": "Since 2026-09-08",
-      "deltaPct": 26.7,
+      "deltaPct": 26.9,
       "metricPull": {
         "scope": "flow_message",
         "preset": "click_rate",
@@ -152,7 +152,7 @@
         "benchmarkDays": 30,
         "autoPull": true
       },
-      "lastPulledAt": "2026-09-19T03:24:40.000Z"
+      "lastPulledAt": "2026-09-19T03:28:43.000Z"
     },
     {
       "id": "exp-welcome-sms",
@@ -165,9 +165,9 @@
       "metricLabel": "Revenue / recipient",
       "benchmarkValue": "$39.09",
       "benchmarkNote": "30d before 2026-09-11",
-      "currentValue": "$33.71",
+      "currentValue": "$33.63",
       "currentNote": "Since 2026-09-11",
-      "deltaPct": -13.8,
+      "deltaPct": -14.0,
       "metricPull": {
         "scope": "flow_message",
         "preset": "revenue_per_recipient",
@@ -185,7 +185,7 @@
         "benchmarkDays": 30,
         "autoPull": true
       },
-      "lastPulledAt": "2026-09-19T03:24:40.000Z"
+      "lastPulledAt": "2026-09-19T03:28:43.000Z"
     },
     {
       "id": "exp-vip-fall",
