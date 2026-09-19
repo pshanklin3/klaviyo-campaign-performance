@@ -661,6 +661,9 @@ export function CustomerAccountView({
                   Editable: what changed. Benchmark / current come from the
                   metric pull (flow message, campaign, or aggregate) around the
                   change date.
+                  {editing
+                    ? " Use Add experiment / Delete on each card, then Save."
+                    : " Click Edit to add or remove experiments."}
                 </CardDescription>
               </div>
               {editing ? (
@@ -672,16 +675,32 @@ export function CustomerAccountView({
                   onClick={addExperiment}
                 >
                   <Plus className="size-3.5" />
-                  Add
+                  Add experiment
                 </Button>
               ) : null}
             </CardHeader>
             <CardContent className="space-y-4">
               {plan.experiments.length === 0 ? (
-                <p className="text-sm text-[color:var(--ink-soft)]">
-                  No experiments yet.
-                  {editing ? " Click Add to create one." : " Click Edit to add."}
-                </p>
+                <div className="space-y-3 rounded-2xl border border-dashed border-[color:var(--panel-border)] bg-white/50 px-4 py-6 text-center">
+                  <p className="text-sm text-[color:var(--ink-soft)]">
+                    No experiments yet.
+                  </p>
+                  {editing ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={addExperiment}
+                    >
+                      <Plus className="size-3.5" />
+                      Add experiment
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-[color:var(--ink-muted)]">
+                      Click Edit (top right) to add one.
+                    </p>
+                  )}
+                </div>
               ) : (
                 plan.experiments.map((raw) => {
                   const item = ensureExperimentMetricPull(raw);
@@ -732,18 +751,26 @@ export function CustomerAccountView({
                               <Button
                                 type="button"
                                 size="sm"
-                                variant="ghost"
+                                variant="outline"
                                 className="rounded-full text-rose-700"
-                                onClick={() =>
+                                onClick={() => {
+                                  if (
+                                    !window.confirm(
+                                      `Delete experiment “${item.name}”?`,
+                                    )
+                                  ) {
+                                    return;
+                                  }
                                   setPlan((p) => ({
                                     ...p,
                                     experiments: p.experiments.filter(
                                       (e) => e.id !== item.id,
                                     ),
-                                  }))
-                                }
+                                  }));
+                                }}
                               >
                                 <Trash2 className="size-3.5" />
+                                Delete
                               </Button>
                             </>
                           ) : (
@@ -1165,6 +1192,17 @@ export function CustomerAccountView({
                   );
                 })
               )}
+              {editing && plan.experiments.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full rounded-full"
+                  onClick={addExperiment}
+                >
+                  <Plus className="size-3.5" />
+                  Add another experiment
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
 
