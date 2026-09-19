@@ -857,11 +857,11 @@ export function CustomerAccountView({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-                <MetricCard metric={overview.attributedL30} />
-                <MetricCard metric={overview.attributedYesterday} />
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard metric={overview.ecomL30} />
                 <MetricCard metric={overview.ecomYesterday} />
+                <MetricCard metric={overview.attributedL30} />
+                <MetricCard metric={overview.attributedYesterday} />
               </div>
 
               <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
