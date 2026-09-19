@@ -182,7 +182,7 @@ export async function findConversionMetricId(): Promise<string> {
 
   const metrics = await klaviyoFetch<{
     data: { id: string; attributes: { name: string } }[];
-  }>("/metrics/?fields[metric]=name&page[size]=100");
+  }>("/metrics/?fields[metric]=name");
 
   const preferred = ["Placed Order", "Ordered Product", "Checkout Started"];
   for (const name of preferred) {
