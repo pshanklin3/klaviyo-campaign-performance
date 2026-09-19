@@ -3,7 +3,6 @@ import {
   fetchCampaignValuesReport,
   fetchFlowValuesReport,
   findConversionMetricId,
-  hasKlaviyoApiKey,
   windowBounds,
   type ReportStatistics,
 } from "@/lib/klaviyo/reporting";
@@ -190,11 +189,17 @@ async function statsForWindow(
 export async function pullExperimentMetrics(
   experiment: Experiment,
 ): Promise<PullExperimentResult> {
-  if (!hasKlaviyoApiKey()) {
+  // Auth comes from withKlaviyoAuth (OAuth) or env API key fallback inside klaviyoFetch.
+  try {
+    // Probe auth early for a clearer error
+    await findConversionMetricId();
+  } catch (error) {
     return {
       ok: false,
       error:
-        "No KLAVIYO_PRIVATE_API_KEY on the server. Add it in Vercel env, or ask the Cursor agent (Klaviyo SSO) to refresh metrics.",
+        error instanceof Error
+          ? error.message
+          : "Klaviyo not connected — use Connect Klaviyo (OAuth).",
     };
   }
 

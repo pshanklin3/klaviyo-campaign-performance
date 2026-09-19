@@ -1,4 +1,8 @@
-import { hasKlaviyoApiKey } from "@/lib/klaviyo/reporting";
+import {
+  hasKlaviyoConnection,
+  resolveKlaviyoAuth,
+  withKlaviyoAuth,
+} from "@/lib/klaviyo/reporting";
 import { pullAllExperimentMetrics } from "@/lib/plan/pull-experiment-metrics";
 import { pullOverviewMetrics } from "@/lib/plan/pull-overview-metrics";
 import {
@@ -16,8 +20,7 @@ export const maxDuration = 60;
 type Params = { params: Promise<{ customerId: string }> };
 
 /**
- * One-click / prompt refresh: pull overview + experiments from Klaviyo
- * Reporting API and save to Blob. Requires KLAVIYO_PRIVATE_API_KEY.
+ * One-click refresh via Klaviyo OAuth (preferred) or optional API key.
  */
 export async function POST(request: Request, { params }: Params) {
   const { customerId } = await params;
@@ -31,23 +34,30 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   }
 
-  if (!hasKlaviyoApiKey()) {
+  if (!(await hasKlaviyoConnection(customerId))) {
     return NextResponse.json(
       {
         ok: false,
-        error: "One-click pull isn’t available without a Klaviyo connection on the server",
-        hint: "Do not use the customer’s private API key. Ask Cursor (Klaviyo MCP / SSO): “Refresh Drake metrics for hunter-trading” — the agent pulls via MCP and updates the live plan. Or connect Klaviyo OAuth later for true in-app Refresh.",
-        mode: "mcp_required",
+        error: "Klaviyo not connected",
+        hint: "Click Connect Klaviyo on this page (OAuth). Do not use a customer private API key.",
+        mode: "oauth_required",
       },
       { status: 400 },
     );
   }
 
   try {
-    const [overviewPull, experimentPull] = await Promise.all([
-      pullOverviewMetrics(plan),
-      pullAllExperimentMetrics(plan.experiments),
-    ]);
+    const auth = await resolveKlaviyoAuth(customerId);
+    const { overviewPull, experimentPull } = await withKlaviyoAuth(
+      auth,
+      async () => {
+        const [overview, experiments] = await Promise.all([
+          pullOverviewMetrics(plan),
+          pullAllExperimentMetrics(plan.experiments),
+        ]);
+        return { overviewPull: overview, experimentPull: experiments };
+      },
+    );
 
     const syncedAt = new Date().toISOString();
     const nextPlan = {
@@ -74,7 +84,7 @@ export async function POST(request: Request, { params }: Params) {
     const fresh = await getCustomerPlan(customerId);
     return NextResponse.json({
       ok: true,
-      mode: "api_key",
+      mode: auth.type === "oauth" ? "oauth" : "api_key",
       storage: saved.storage,
       plan: fresh ?? nextPlan,
       results: experimentPull.results,
@@ -87,7 +97,7 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Refresh failed",
-        hint: "Check KLAVIYO_PRIVATE_API_KEY scopes (read metrics / reporting) and redeploy.",
+        hint: "Try Connect Klaviyo again, then Refresh metrics.",
       },
       { status: 500 },
     );

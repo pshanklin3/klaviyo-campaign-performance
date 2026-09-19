@@ -1,4 +1,6 @@
+import { AsyncLocalStorage } from "async_hooks";
 import { formatISO, parseISO, subDays } from "date-fns";
+import { getValidAccessToken } from "@/lib/klaviyo/oauth";
 
 const KLAVIYO_BASE = "https://a.klaviyo.com/api";
 const REVISION = "2024-10-15";
@@ -29,6 +31,12 @@ type Timeframe =
   | { key: string }
   | { start: string; end: string };
 
+export type KlaviyoAuth =
+  | { type: "api_key"; key: string }
+  | { type: "oauth"; accessToken: string };
+
+const authStore = new AsyncLocalStorage<KlaviyoAuth>();
+
 function getApiKey(): string | undefined {
   return (
     process.env.KLAVIYO_PRIVATE_API_KEY?.trim() ||
@@ -41,14 +49,53 @@ export function hasKlaviyoApiKey(): boolean {
   return Boolean(getApiKey());
 }
 
-async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("Missing Klaviyo API key");
+/** True if we can call Klaviyo for this customer (OAuth or legacy API key). */
+export async function hasKlaviyoConnection(
+  customerId?: string,
+): Promise<boolean> {
+  if (hasKlaviyoApiKey()) return true;
+  if (!customerId) return false;
+  return Boolean(await getValidAccessToken(customerId));
+}
 
+export async function withKlaviyoAuth<T>(
+  auth: KlaviyoAuth,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return authStore.run(auth, fn);
+}
+
+/** Resolve auth for a customer: prefer OAuth, fall back to env API key. */
+export async function resolveKlaviyoAuth(
+  customerId: string,
+): Promise<KlaviyoAuth> {
+  const accessToken = await getValidAccessToken(customerId);
+  if (accessToken) return { type: "oauth", accessToken };
+  const key = getApiKey();
+  if (key) return { type: "api_key", key };
+  throw new Error(
+    "Klaviyo not connected. Click Connect Klaviyo (OAuth) on the account page.",
+  );
+}
+
+function authHeaders(): Record<string, string> {
+  const auth = authStore.getStore();
+  if (auth?.type === "oauth") {
+    return { Authorization: `Bearer ${auth.accessToken}` };
+  }
+  if (auth?.type === "api_key") {
+    return { Authorization: `Klaviyo-API-Key ${auth.key}` };
+  }
+  const key = getApiKey();
+  if (key) return { Authorization: `Klaviyo-API-Key ${key}` };
+  throw new Error("Missing Klaviyo auth");
+}
+
+async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${KLAVIYO_BASE}${path}`, {
     ...init,
     headers: {
-      Authorization: `Klaviyo-API-Key ${apiKey}`,
+      ...authHeaders(),
       Accept: "application/json",
       "Content-Type": "application/json",
       revision: REVISION,

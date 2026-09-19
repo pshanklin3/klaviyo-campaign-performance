@@ -3,7 +3,6 @@ import {
   fetchCampaignValuesReport,
   fetchFlowValuesReport,
   findConversionMetricId,
-  hasKlaviyoApiKey,
   queryMetricSumValue,
   type CampaignReportRow,
   type FlowReportRow,
@@ -111,12 +110,6 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   periods: PeriodRow[];
   callout: string;
 }> {
-  if (!hasKlaviyoApiKey()) {
-    throw new Error(
-      "Add KLAVIYO_PRIVATE_API_KEY in Vercel (Secret) for one-click refresh.",
-    );
-  }
-
   const conversionMetricId = await findConversionMetricId();
   const now = new Date();
   const today = new Date(

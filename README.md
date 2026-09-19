@@ -19,9 +19,19 @@ Customer-facing account health (Performance + Success plan). Edit fields **on th
 4. Change fields in place on the dashboard
 5. Click **Save**
 
-## Connect Klaviyo
+## Connect Klaviyo (OAuth)
 
-Use **Klaviyo MCP / SSO in Cursor** to refresh live metrics. Do **not** store the customer’s private API key in Vercel.
+1. Create/configure the OAuth app in Klaviyo (**Manage apps**) — already done for Drake Dashboard.
+2. On Vercel → **Environment Variables** (Secret), add:
+   - `KLAVIYO_CLIENT_ID` — from the OAuth app
+   - `KLAVIYO_CLIENT_SECRET` — generate/copy once if needed
+   - `CSM_ADMIN_PASSWORD` — if not already set
+   - Redirect in the Klaviyo app must match:  
+     `https://klaviyo-campaign-performance.vercel.app/api/klaviyo/oauth/callback`
+3. **Redeploy**
+4. On `/c/hunter-trading`: **Connect Klaviyo** → approve in Klaviyo → **Refresh metrics**
+
+Tokens are stored in Blob per customer. No customer private API key.
 
 ## Durable Save on Vercel
 
@@ -34,17 +44,10 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 
 ## Refresh metrics
 
-**Do not put the customer’s Klaviyo private API key in Vercel.**
+1. **Connect Klaviyo** (once per account) — OAuth, no private API key  
+2. **Refresh metrics** (or type `refresh metrics` → Go)
 
-CSMs refresh live numbers through **Cursor + Klaviyo MCP (SSO)**:
-
-1. In Cursor on this project, say: **Refresh Drake metrics for hunter-trading**
-2. The agent pulls Account Overview + experiments via MCP and updates `plan.json` (and Blob when available)
-3. After deploy / Blob save, `/c/hunter-trading` shows the new numbers
-
-The **Refresh metrics** button / “Ask the page” prompt on the site will say the same if no server-side Klaviyo connection is configured.
-
-Optional later: Klaviyo **OAuth Connect** in the app (customer authorizes once) so Refresh works in-browser without a private key.
+Fallback: ask Cursor with MCP to refresh if OAuth isn’t set up yet.
 
 ## Run locally
 

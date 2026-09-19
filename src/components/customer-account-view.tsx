@@ -51,7 +51,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Tab = "performance" | "success";
 
@@ -226,12 +226,58 @@ export function CustomerAccountView({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeStorage, setActiveStorage] = useState(storageMode);
+  const [klaviyoConnected, setKlaviyoConnected] = useState(false);
+  const [klaviyoAppConfigured, setKlaviyoAppConfigured] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const experimentsEndRef = useRef<HTMLDivElement | null>(null);
   const pendingRefreshRef = useRef(false);
+  const pendingConnectRef = useRef(false);
 
   const { overview } = plan;
 
   const exportJson = useMemo(() => JSON.stringify(plan, null, 2), [plan]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/customers/${plan.customerId}/klaviyo`,
+          { cache: "no-store" },
+        );
+        const body = (await res.json().catch(() => null)) as {
+          connected?: boolean;
+          appConfigured?: boolean;
+        } | null;
+        if (!cancelled && body) {
+          setKlaviyoConnected(Boolean(body.connected));
+          setKlaviyoAppConfigured(Boolean(body.appConfigured));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [plan.customerId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get("oauth");
+    if (!oauth) return;
+    if (oauth === "connected") {
+      setKlaviyoConnected(true);
+      setStatus("Klaviyo connected. Click Refresh metrics to pull live numbers.");
+      setError(null);
+    } else if (oauth.startsWith("error:")) {
+      setError(oauth.slice("error:".length));
+    }
+    params.delete("oauth");
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+    window.history.replaceState({}, "", next);
+  }, []);
 
   function updateExperiment(id: string, patch: Partial<Experiment>) {
     setPlan((p) => ({
@@ -327,6 +373,44 @@ export function CustomerAccountView({
     }));
   }
 
+  async function connectKlaviyo() {
+    if (!password.trim()) {
+      pendingConnectRef.current = true;
+      setShowUnlock(true);
+      setError("Enter the CSM password to connect Klaviyo.");
+      return;
+    }
+    pendingConnectRef.current = false;
+    setConnecting(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const response = await fetch("/api/klaviyo/oauth/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csm-admin-password": password,
+        },
+        body: JSON.stringify({ customerId: plan.customerId }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        hint?: string;
+        authorizeUrl?: string;
+      } | null;
+      if (!response.ok || !body?.authorizeUrl) {
+        throw new Error(
+          [body?.error, body?.hint].filter(Boolean).join(" — ") ||
+            "Could not start Klaviyo connect",
+        );
+      }
+      window.location.href = body.authorizeUrl;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Connect failed");
+      setConnecting(false);
+    }
+  }
+
   async function refreshMetrics() {
     if (!password.trim()) {
       pendingRefreshRef.current = true;
@@ -352,21 +436,22 @@ export function CustomerAccountView({
         error?: string;
         hint?: string;
         message?: string;
-        mode?: "mcp" | "api_key" | "mcp_required";
+        mode?: "mcp" | "api_key" | "mcp_required" | "oauth" | "oauth_required";
         plan?: CustomerPlan;
         storage?: "blob" | "file";
         results?: { id: string; name: string; ok: boolean; detail: string }[];
       } | null;
       if (!response.ok) {
-        const needsMcp =
+        const needsConnect =
+          body?.mode === "oauth_required" ||
           body?.mode === "mcp_required" ||
-          /MCP|Cursor|OAuth/i.test(
+          /Connect Klaviyo|OAuth|MCP|Cursor/i.test(
             [body?.error, body?.hint].filter(Boolean).join(" "),
           );
-        if (needsMcp) {
+        if (needsConnect) {
           setStatus(
             body?.hint ||
-              'Ask Cursor: “Refresh Drake metrics for hunter-trading” (Klaviyo MCP / SSO). No customer private API key.',
+              "Connect Klaviyo first (OAuth), then click Refresh metrics.",
           );
           setError(null);
           return;
@@ -563,6 +648,11 @@ export function CustomerAccountView({
       void refreshMetrics();
       return;
     }
+    if (pendingConnectRef.current) {
+      setStatus("Password accepted — starting Klaviyo connect…");
+      void connectKlaviyo();
+      return;
+    }
     setStatus("Editing unlocked — change fields on this page, then Save.");
   }
 
@@ -579,6 +669,20 @@ export function CustomerAccountView({
             </Badge>
             <Badge variant="outline" className="rounded-full">
               {activeStorage === "blob" ? "Blob" : "File"} storage
+            </Badge>
+            <Badge
+              variant="outline"
+              className={`rounded-full ${
+                klaviyoConnected
+                  ? "border-emerald-600/40 text-emerald-800"
+                  : ""
+              }`}
+            >
+              {klaviyoConnected
+                ? "Klaviyo connected"
+                : klaviyoAppConfigured
+                  ? "Klaviyo not connected"
+                  : "Set KLAVIYO_CLIENT_ID on Vercel"}
             </Badge>
           </div>
           {editing ? (
@@ -626,6 +730,20 @@ export function CustomerAccountView({
               <Button
                 type="button"
                 size="sm"
+                variant="outline"
+                className="rounded-full"
+                disabled={connecting}
+                onClick={() => void connectKlaviyo()}
+              >
+                {connecting
+                  ? "Connecting…"
+                  : klaviyoConnected
+                    ? "Reconnect Klaviyo"
+                    : "Connect Klaviyo"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 className="rounded-full"
                 disabled={refreshing}
                 onClick={() => void refreshMetrics()}
@@ -648,6 +766,20 @@ export function CustomerAccountView({
             </>
           ) : (
             <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                disabled={connecting || saving}
+                onClick={() => void connectKlaviyo()}
+              >
+                {connecting
+                  ? "Connecting…"
+                  : klaviyoConnected
+                    ? "Reconnect Klaviyo"
+                    : "Connect Klaviyo"}
+              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -1053,9 +1185,9 @@ export function CustomerAccountView({
                   In motion · performance experiments
                 </CardTitle>
                 <CardDescription>
-                  Names, goals, and changes are CSM-edited. Metric numbers are
-                  refreshed by Cursor with Klaviyo MCP (SSO) — say “Refresh
-                  Drake metrics”. No customer private API key.
+                  Names, goals, and changes are CSM-edited. Numbers: Connect
+                  Klaviyo once (OAuth), then Refresh metrics. No customer
+                  private API key.
                   {editing
                     ? " Add / Delete experiments, then Save."
                     : " Click Edit to add or remove experiments."}
