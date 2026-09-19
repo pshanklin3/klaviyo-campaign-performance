@@ -443,8 +443,35 @@ export function CustomerAccountView({
     pendingRefreshRef.current = false;
     setRefreshing(true);
     setError(null);
-    setStatus("Pass 1/3 — refreshing ecom…");
+    setStatus("Pass 1 — refreshing ecom…");
     const notes: string[] = [];
+    const expFailures: string[] = [];
+    let expOk = 0;
+
+    const applyPlan = (body: {
+      plan?: CustomerPlan;
+      storage?: "blob" | "file";
+    }) => {
+      if (body.plan) {
+        setPlan({
+          ...body.plan,
+          experiments: body.plan.experiments.map(ensureExperimentMetricPull),
+        });
+      }
+      if (body.storage) setActiveStorage(body.storage);
+    };
+
+    const waitCountdown = async (seconds: number, label: string) => {
+      const end = Date.now() + Math.max(0, seconds) * 1000;
+      while (Date.now() < end) {
+        const left = Math.max(1, Math.ceil((end - Date.now()) / 1000));
+        setStatus(`${label} — waiting ${left}s for Klaviyo rate limit…`);
+        await new Promise((r) =>
+          setTimeout(r, Math.min(1000, Math.max(0, end - Date.now()))),
+        );
+      }
+    };
+
     try {
       try {
         sessionStorage.setItem("csm-admin-password", authPassword);
@@ -452,27 +479,14 @@ export function CustomerAccountView({
         // ignore
       }
 
-      const applyPlan = (body: {
-        plan?: CustomerPlan;
-        storage?: "blob" | "file";
-      }) => {
-        if (body.plan) {
-          setPlan({
-            ...body.plan,
-            experiments: body.plan.experiments.map(ensureExperimentMetricPull),
-          });
-        }
-        if (body.storage) setActiveStorage(body.storage);
-      };
-
       const ecomBody = await postRefresh(
         `/api/customers/${plan.customerId}/metrics/refresh`,
         authPassword,
       );
       applyPlan(ecomBody);
       notes.push("ecom");
-      setStatus("Pass 2/3 — refreshing attributed…");
 
+      setStatus("Pass 2 — refreshing attributed…");
       try {
         const attrBody = await postRefresh(
           `/api/customers/${plan.customerId}/metrics/refresh-attributed`,
@@ -480,6 +494,83 @@ export function CustomerAccountView({
         );
         applyPlan(attrBody);
         notes.push("attributed");
+
+        const experiments = (
+          attrBody.plan?.experiments ?? plan.experiments
+        ).map(ensureExperimentMetricPull);
+        const autoExperiments = experiments.filter(
+          (e) => e.metricPull.autoPull,
+        );
+        const totalPasses = 2 + autoExperiments.length;
+
+        for (let i = 0; i < autoExperiments.length; i++) {
+          const exp = autoExperiments[i];
+          const waitSec =
+            i === 0
+              ? (attrBody.nextWaitSec ?? 45)
+              : 45;
+          await waitCountdown(
+            waitSec,
+            `Pass ${3 + i}/${totalPasses} — next: ${exp.name}`,
+          );
+          setStatus(
+            `Pass ${3 + i}/${totalPasses} — refreshing ${exp.name}…`,
+          );
+
+          try {
+            const expBody = await postRefresh(
+              `/api/customers/${plan.customerId}/metrics/refresh-experiment`,
+              authPassword,
+              { experimentId: exp.id },
+            );
+            applyPlan(expBody);
+            if (expBody.ok === false || expBody.error) {
+              throw new Error(expBody.error || "Experiment refresh failed");
+            }
+            expOk += 1;
+            notes.push(exp.name);
+          } catch (expErr) {
+            const msg =
+              expErr instanceof Error ? expErr.message : "failed";
+            const retryMatch = msg.match(/wait\s+(\d+)\s*s/i);
+            const expectedMatch = msg.match(
+              /Expected available in\s+(\d+)\s+seconds?/i,
+            );
+            const retrySec = retryMatch
+              ? Number(retryMatch[1])
+              : expectedMatch
+                ? Number(expectedMatch[1])
+                : /429|throttled/i.test(msg)
+                  ? 45
+                  : 0;
+
+            if (retrySec > 0) {
+              await waitCountdown(
+                retrySec + 2,
+                `Retrying ${exp.name} after rate limit`,
+              );
+              setStatus(`Retrying ${exp.name}…`);
+              try {
+                const retryBody = await postRefresh(
+                  `/api/customers/${plan.customerId}/metrics/refresh-experiment`,
+                  authPassword,
+                  { experimentId: exp.id },
+                );
+                applyPlan(retryBody);
+                expOk += 1;
+                notes.push(exp.name);
+                continue;
+              } catch (retryErr) {
+                expFailures.push(
+                  `${exp.name}: ${retryErr instanceof Error ? retryErr.message : "failed"}`,
+                );
+                continue;
+              }
+            }
+
+            expFailures.push(`${exp.name}: ${msg}`);
+          }
+        }
       } catch (attrErr) {
         setError(
           attrErr instanceof Error
@@ -490,76 +581,44 @@ export function CustomerAccountView({
         return;
       }
 
-      // Brief cooldown so campaign/flow report rate limits can recover
-      setStatus("Pass 3/3 — waiting briefly, then experiments…");
-      await new Promise((r) => setTimeout(r, 4000));
-      setStatus("Pass 3/3 — refreshing experiments…");
-
-      try {
-        const expBody = await postRefresh(
-          `/api/customers/${plan.customerId}/metrics/refresh-experiments`,
-          authPassword,
-        );
-        applyPlan(expBody);
-        const failed =
-          expBody.results?.filter((r) => !r.ok) ?? [];
-        const okCount = expBody.results?.filter((r) => r.ok).length ?? 0;
-        const deferred =
-          expBody.results?.filter((r) => /Deferred/i.test(r.detail)).length ??
-          0;
-        if (failed.length) {
-          const firstDetail = failed[0]?.detail?.slice(0, 160) ?? "";
-          setStatus(
-            `Ecom + attributed updated; experiments: ${okCount} ok, ${failed.length} failed` +
-              (firstDetail ? ` (${failed[0].name}: ${firstDetail})` : ""),
-          );
-          setError(
-            failed
-              .map((r) => `${r.name}: ${r.detail}`)
-              .join(" · ")
-              .slice(0, 500),
-          );
-        } else if (deferred) {
-          setStatus(
-            `Ecom + attributed + ${okCount} experiment(s) updated; ${deferred} deferred — Refresh again to finish.`,
-          );
-        } else {
-          setStatus(
-            `Ecom, attributed, and ${okCount} experiment(s) updated from Klaviyo.`,
-          );
-        }
-      } catch (expErr) {
-        setError(
-          expErr instanceof Error
-            ? `Pass 3 (experiments) failed: ${expErr.message}`
-            : "Pass 3 (experiments) failed — click Refresh again.",
-        );
+      if (expFailures.length) {
+        setError(expFailures.join(" · ").slice(0, 600));
         setStatus(
-          `Updated: ${notes.join(", ")}. Experiments not refreshed this time.`,
+          `Ecom + attributed updated; experiments: ${expOk} ok, ${expFailures.length} failed.`,
+        );
+      } else {
+        setStatus(
+          `Ecom, attributed, and ${expOk} experiment(s) updated from Klaviyo.`,
         );
       }
-
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Refresh failed");
+    } finally {
       try {
         sessionStorage.removeItem("csm-admin-password");
       } catch {
         // ignore
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Refresh failed");
-    } finally {
       setRefreshing(false);
     }
   }
 
-  async function postRefresh(url: string, authPassword: string) {
+  async function postRefresh(
+    url: string,
+    authPassword: string,
+    jsonBody?: Record<string, string>,
+  ) {
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "x-csm-admin-password": authPassword,
+        ...(jsonBody ? { "Content-Type": "application/json" } : {}),
       },
+      body: jsonBody ? JSON.stringify(jsonBody) : undefined,
     });
     const rawText = await response.text();
     type RefreshBody = {
+      ok?: boolean;
       error?: string;
       hint?: string;
       message?: string;
@@ -568,6 +627,9 @@ export function CustomerAccountView({
       storage?: "blob" | "file";
       results?: { id: string; name: string; ok: boolean; detail: string }[];
       partial?: boolean;
+      nextWaitSec?: number;
+      retryAfterSec?: number;
+      name?: string;
     };
     let body: RefreshBody | null = null;
     try {
@@ -581,6 +643,13 @@ export function CustomerAccountView({
         throw new Error(
           [body?.error, body?.hint].filter(Boolean).join(" — ") ||
             "Connect Klaviyo first (OAuth), then click Refresh metrics.",
+        );
+      }
+      if (response.status === 429) {
+        const sec = body?.retryAfterSec ?? 45;
+        throw new Error(
+          body?.error ||
+            `Klaviyo API 429: rate limited — wait ${sec}s then retry.`,
         );
       }
       if (

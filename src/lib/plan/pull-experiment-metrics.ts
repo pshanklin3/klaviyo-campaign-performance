@@ -88,6 +88,9 @@ async function statsForWindow(
   const pull = ensureExperimentMetricPull(experiment).metricPull;
   const timeframe = { start: startIso, end: endIso };
   const objectId = pull.objectId.trim();
+  const needsValueStats = /revenue|value|attributed|conversion_value|aov/i.test(
+    `${pull.preset} ${pull.goalMetricLabel}`,
+  );
 
   if (
     pull.scope === "flow_message" ||
@@ -103,6 +106,7 @@ async function statsForWindow(
       conversionMetricId,
       timeframe,
       filters: filter,
+      includeValueStats: needsValueStats,
     });
 
     let matched = rows;
@@ -154,6 +158,7 @@ async function statsForWindow(
       conversionMetricId,
       timeframe,
       filters: filter,
+      includeValueStats: needsValueStats,
     });
     let matched = rows;
     if (ids.length) {
@@ -174,11 +179,11 @@ async function statsForWindow(
     return aggregateStatistics(matched.map((r) => r.statistics));
   }
 
-  // Account / custom / aggregate: unfiltered campaign + flow blend is ambiguous;
-  // use campaign report as a starting point when no object id.
+  // Account / custom / aggregate
   const rows = await fetchCampaignValuesReport({
     conversionMetricId,
     timeframe,
+    includeValueStats: needsValueStats,
   });
   if (rows.length === 0) {
     throw new Error("No campaign aggregate rows for this window");

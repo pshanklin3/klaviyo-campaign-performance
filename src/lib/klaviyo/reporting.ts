@@ -138,6 +138,13 @@ function releaseAggregateSlot() {
   if (next) next();
 }
 
+function parseExpectedAvailableMs(body: string, headerMs?: number): number | undefined {
+  if (headerMs && headerMs > 0) return headerMs;
+  const match = body.match(/Expected available in\s+(\d+)\s+seconds?/i);
+  if (match) return Number(match[1]) * 1000;
+  return undefined;
+}
+
 async function klaviyoFetchOnce<T>(
   path: string,
   init?: RequestInit,
@@ -161,9 +168,8 @@ async function klaviyoFetchOnce<T>(
     if (!response.ok) {
       const body = await response.text();
       const retryHeader = response.headers.get("Retry-After");
-      const retryAfterMs = retryHeader
-        ? Number(retryHeader) * 1000 || 15_000
-        : undefined;
+      const headerMs = retryHeader ? Number(retryHeader) * 1000 || undefined : undefined;
+      const retryAfterMs = parseExpectedAvailableMs(body, headerMs);
       return { ok: false, status: response.status, body, retryAfterMs };
     }
 
@@ -202,26 +208,24 @@ async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
     }
 
     try {
-      let attempt = 0;
-      const maxAttempts = valuesReport ? 2 : 3;
-      while (attempt < maxAttempts) {
-        attempt += 1;
-        const result = await klaviyoFetchOnce<T>(path, init);
-        if (valuesReport) lastValuesReportAt = Date.now();
-        if (aggregate) lastAggregateAt = Date.now();
-        if (result.ok) return result.data;
+      // Do not sleep 40s+ inside the serverless function on 429 — surface to client.
+      const result = await klaviyoFetchOnce<T>(path, init);
+      if (valuesReport) lastValuesReportAt = Date.now();
+      if (aggregate) lastAggregateAt = Date.now();
+      if (result.ok) return result.data;
 
-        if (result.status === 429 && attempt < maxAttempts) {
-          await sleep(Math.min(result.retryAfterMs ?? 5_000 * attempt, 12_000));
-          continue;
-        }
-
+      if (result.status === 429) {
+        const sec = result.retryAfterMs
+          ? Math.ceil(result.retryAfterMs / 1000)
+          : 45;
         throw new Error(
-          `Klaviyo API ${result.status}: ${result.body.slice(0, 400) || "request failed"}`,
+          `Klaviyo API 429: rate limited — wait ${sec}s then retry. ${result.body.slice(0, 200)}`,
         );
       }
 
-      throw new Error("Klaviyo API: exhausted retries");
+      throw new Error(
+        `Klaviyo API ${result.status}: ${result.body.slice(0, 400) || "request failed"}`,
+      );
     } finally {
       if (aggregate) releaseAggregateSlot();
     }
@@ -327,29 +331,32 @@ export async function fetchFlowValuesReport(options: {
   conversionMetricId: string;
   timeframe: Timeframe;
   filters?: string;
+  /** Default true. Set false for rate-only pulls to avoid extra retries. */
+  includeValueStats?: boolean;
 }): Promise<FlowReportRow[]> {
+  const includeValueStats = options.includeValueStats !== false;
+  const attributes: {
+    statistics: string[];
+    timeframe: Timeframe;
+    conversion_metric_id: string;
+    filter?: string;
+    value_statistics?: string[];
+  } = {
+    statistics: [...RATE_STATS],
+    timeframe: options.timeframe,
+    conversion_metric_id: options.conversionMetricId,
+    ...(options.filters ? { filter: options.filters } : {}),
+  };
+  if (includeValueStats) {
+    attributes.value_statistics = [...VALUE_STATS];
+  }
+
   const payload = {
     data: {
       type: "flow-values-report",
-      attributes: {
-        statistics: [...RATE_STATS],
-        timeframe: options.timeframe,
-        conversion_metric_id: options.conversionMetricId,
-        ...(options.filters ? { filter: options.filters } : {}),
-      },
+      attributes,
     },
   };
-
-  // value stats in a second field when supported
-  (
-    payload.data.attributes as {
-      statistics: string[];
-      conversion_metric_id: string;
-      timeframe: Timeframe;
-      filter?: string;
-      value_statistics?: string[];
-    }
-  ).value_statistics = [...VALUE_STATS];
 
   try {
     const report = await klaviyoFetch<{
@@ -360,25 +367,25 @@ export async function fetchFlowValuesReport(options: {
     });
     return report.data.attributes.results ?? [];
   } catch (error) {
-    // Retry without value statistics if conversion metric doesn't support values
     const message = error instanceof Error ? error.message : "";
-    if (!message.toLowerCase().includes("value")) throw error;
-    const retryPayload = {
-      data: {
-        type: "flow-values-report",
-        attributes: {
-          statistics: [...RATE_STATS],
-          timeframe: options.timeframe,
-          conversion_metric_id: options.conversionMetricId,
-          ...(options.filters ? { filter: options.filters } : {}),
-        },
-      },
-    };
+    if (!includeValueStats || !message.toLowerCase().includes("value")) {
+      throw error;
+    }
     const report = await klaviyoFetch<{
       data: { attributes: { results: FlowReportRow[] } };
     }>("/flow-values-reports/", {
       method: "POST",
-      body: JSON.stringify(retryPayload),
+      body: JSON.stringify({
+        data: {
+          type: "flow-values-report",
+          attributes: {
+            statistics: [...RATE_STATS],
+            timeframe: options.timeframe,
+            conversion_metric_id: options.conversionMetricId,
+            ...(options.filters ? { filter: options.filters } : {}),
+          },
+        },
+      }),
     });
     return report.data.attributes.results ?? [];
   }
@@ -388,7 +395,9 @@ export async function fetchCampaignValuesReport(options: {
   conversionMetricId: string;
   timeframe: Timeframe;
   filters?: string;
+  includeValueStats?: boolean;
 }): Promise<CampaignReportRow[]> {
+  const includeValueStats = options.includeValueStats !== false;
   const baseAttributes = {
     statistics: [...RATE_STATS],
     timeframe: options.timeframe,
@@ -400,10 +409,9 @@ export async function fetchCampaignValuesReport(options: {
     const payload = {
       data: {
         type: "campaign-values-report",
-        attributes: {
-          ...baseAttributes,
-          value_statistics: [...VALUE_STATS],
-        },
+        attributes: includeValueStats
+          ? { ...baseAttributes, value_statistics: [...VALUE_STATS] }
+          : baseAttributes,
       },
     };
     const report = await klaviyoFetch<{
@@ -415,7 +423,9 @@ export async function fetchCampaignValuesReport(options: {
     return report.data.attributes.results ?? [];
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (!message.toLowerCase().includes("value")) throw error;
+    if (!includeValueStats || !message.toLowerCase().includes("value")) {
+      throw error;
+    }
     const report = await klaviyoFetch<{
       data: { attributes: { results: CampaignReportRow[] } };
     }>("/campaign-values-reports/", {

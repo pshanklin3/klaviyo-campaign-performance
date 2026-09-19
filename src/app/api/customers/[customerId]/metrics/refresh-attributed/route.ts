@@ -82,6 +82,8 @@ export async function POST(request: Request, { params }: Params) {
       pass: "attributed",
       storage: saved.storage,
       plan: fresh ?? nextPlan,
+      // Used 2 values-report calls — client should wait before experiments
+      nextWaitSec: 45,
       elapsedMs: Date.now() - startedAt,
       passwordHint:
         process.env.NODE_ENV === "production"
