@@ -443,82 +443,65 @@ export function CustomerAccountView({
     pendingRefreshRef.current = false;
     setRefreshing(true);
     setError(null);
-    setStatus("Refreshing metrics from Klaviyo…");
+    setStatus("Pass 1/2 — refreshing ecom from Klaviyo…");
     try {
-      const response = await fetch(
-        `/api/customers/${plan.customerId}/metrics/refresh`,
-        {
-          method: "POST",
-          headers: {
-            "x-csm-admin-password": authPassword,
-          },
-        },
-      );
-      const rawText = await response.text();
-      type RefreshBody = {
-        error?: string;
-        hint?: string;
-        message?: string;
-        mode?: "mcp" | "api_key" | "mcp_required" | "oauth" | "oauth_required";
-        plan?: CustomerPlan;
-        storage?: "blob" | "file";
-        results?: { id: string; name: string; ok: boolean; detail: string }[];
-      };
-      let body: RefreshBody | null = null;
       try {
-        body = rawText ? (JSON.parse(rawText) as RefreshBody) : null;
+        sessionStorage.setItem("csm-admin-password", authPassword);
       } catch {
-        body = null;
+        // ignore
       }
-      if (!response.ok) {
-        if (body?.mode === "oauth_required" || body?.mode === "mcp_required") {
-          setKlaviyoConnected(false);
-          setStatus(
-            body?.hint ||
-              "Connect Klaviyo first (OAuth), then click Refresh metrics.",
-          );
-          setError(body?.error ?? null);
-          return;
-        }
-        if (
-          response.status === 504 ||
-          response.status === 502 ||
-          response.status === 408 ||
-          !body
-        ) {
-          throw new Error(
-            `Refresh timed out (HTTP ${response.status}). Overview pull was shortened — wait 20s and click Refresh metrics once more.`,
-          );
-        }
-        throw new Error(
-          [body?.error, body?.hint].filter(Boolean).join(" — ") ||
-            `Refresh failed (HTTP ${response.status})`,
-        );
-      }
-      if (!body) {
-        throw new Error("Refresh returned an empty response — try again.");
-      }
-      if (body?.plan) {
+
+      const ecomBody = await postRefresh(
+        `/api/customers/${plan.customerId}/metrics/refresh`,
+        authPassword,
+      );
+      if (ecomBody.plan) {
         setPlan({
-          ...body.plan,
-          experiments: body.plan.experiments.map(ensureExperimentMetricPull),
+          ...ecomBody.plan,
+          experiments: ecomBody.plan.experiments.map(ensureExperimentMetricPull),
         });
       }
-      if (body?.storage) setActiveStorage(body.storage);
-      const failed =
-        body?.results?.filter((r) => !r.ok).map((r) => r.name) ?? [];
-      const okCount = body?.results?.filter((r) => r.ok).length ?? 0;
-      const ecomOnly =
-        body?.results?.every((r) =>
-          /ecom-only|unchanged/i.test(r.detail),
-        ) ?? false;
-      setStatus(
-        ecomOnly
-          ? "Refreshed ecom from Klaviyo. Attributed & experiments kept from last pull."
-          : failed.length
-            ? `Refreshed overview; experiments: ${okCount} ok, failed: ${failed.join(", ")}`
-            : `Refreshed overview and ${okCount} experiment metric(s) from Klaviyo.`,
-      );
+      if (ecomBody.storage) setActiveStorage(ecomBody.storage);
+      setStatus("Pass 2/2 — refreshing attributed + experiments…");
+
+      try {
+        const attrBody = await postRefresh(
+          `/api/customers/${plan.customerId}/metrics/refresh-attributed`,
+          authPassword,
+        );
+        if (attrBody.plan) {
+          setPlan({
+            ...attrBody.plan,
+            experiments: attrBody.plan.experiments.map(
+              ensureExperimentMetricPull,
+            ),
+          });
+        }
+        if (attrBody.storage) setActiveStorage(attrBody.storage);
+        const failed =
+          attrBody.results?.filter((r) => !r.ok).map((r) => r.name) ?? [];
+        const okCount = attrBody.results?.filter((r) => r.ok).length ?? 0;
+        const skipped =
+          attrBody.results?.filter((r) =>
+            /Skipped this pass/i.test(r.detail),
+          ).length ?? 0;
+        setStatus(
+          failed.length
+            ? `Ecom + attributed updated; experiments: ${okCount} ok, failed: ${failed.join(", ")}`
+            : skipped
+              ? `Ecom + attributed updated; ${okCount} experiment(s) ok, ${skipped} deferred — Refresh again to finish.`
+              : `Ecom, attributed, and ${okCount} experiment(s) updated from Klaviyo.`,
+        );
+      } catch (attrErr) {
+        // Ecom already saved — surface pass-2 failure without discarding pass 1
+        setError(
+          attrErr instanceof Error
+            ? `Ecom saved. Pass 2 failed: ${attrErr.message}`
+            : "Ecom saved. Pass 2 (attributed) failed — click Refresh again.",
+        );
+        setStatus("Ecom updated. Attributed/experiments not refreshed this time.");
+      }
+
       try {
         sessionStorage.removeItem("csm-admin-password");
       } catch {
@@ -529,6 +512,59 @@ export function CustomerAccountView({
     } finally {
       setRefreshing(false);
     }
+  }
+
+  async function postRefresh(url: string, authPassword: string) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-csm-admin-password": authPassword,
+      },
+    });
+    const rawText = await response.text();
+    type RefreshBody = {
+      error?: string;
+      hint?: string;
+      message?: string;
+      mode?: "mcp" | "api_key" | "mcp_required" | "oauth" | "oauth_required";
+      plan?: CustomerPlan;
+      storage?: "blob" | "file";
+      results?: { id: string; name: string; ok: boolean; detail: string }[];
+      partial?: boolean;
+    };
+    let body: RefreshBody | null = null;
+    try {
+      body = rawText ? (JSON.parse(rawText) as RefreshBody) : null;
+    } catch {
+      body = null;
+    }
+    if (!response.ok) {
+      if (body?.mode === "oauth_required" || body?.mode === "mcp_required") {
+        setKlaviyoConnected(false);
+        throw new Error(
+          [body?.error, body?.hint].filter(Boolean).join(" — ") ||
+            "Connect Klaviyo first (OAuth), then click Refresh metrics.",
+        );
+      }
+      if (
+        response.status === 504 ||
+        response.status === 502 ||
+        response.status === 408 ||
+        !body
+      ) {
+        throw new Error(
+          `Refresh timed out (HTTP ${response.status}). Wait 20s and click Refresh once more.`,
+        );
+      }
+      throw new Error(
+        [body?.error, body?.hint].filter(Boolean).join(" — ") ||
+          `Refresh failed (HTTP ${response.status})`,
+      );
+    }
+    if (!body) {
+      throw new Error("Refresh returned an empty response — try again.");
+    }
+    return body;
   }
 
   function runPrompt() {
