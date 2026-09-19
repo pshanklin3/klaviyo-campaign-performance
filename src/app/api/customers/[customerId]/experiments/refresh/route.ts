@@ -60,7 +60,7 @@ export async function POST(request: Request, { params }: Params) {
     plan,
     message:
       "Experiment metrics refresh through Cursor + Klaviyo MCP (SSO), not a private API key.",
-    hint: `In Cursor chat say: “Refresh experiment metrics for ${customerId}”. The agent pulls via Klaviyo MCP, commits plan.json, and after deploy the live site merges those metrics over Blob.`,
+    hint: `Pull via Klaviyo MCP (Claude or Cursor), then POST numbers to /api/customers/${customerId}/metrics/ingest (CSM password or METRICS_INGEST_TOKEN). Or commit plan.json and redeploy.`,
     passwordHint:
       process.env.NODE_ENV === "production"
         ? undefined

@@ -344,7 +344,7 @@ export function CustomerAccountView({
         setStatus(
           body.hint ||
             body.message ||
-            "Ask Cursor: “Refresh experiment metrics” (Klaviyo MCP / SSO).",
+            "Ask Claude/Cursor to refresh via Klaviyo MCP, then POST /api/customers/…/metrics/ingest.",
         );
         return;
       }
@@ -789,8 +789,9 @@ export function CustomerAccountView({
                 </CardTitle>
                 <CardDescription>
                   Names, goals, and changes are CSM-edited. Benchmark / current
-                  are refreshed by the Cursor agent via Klaviyo MCP (SSO) — say
-                  “Refresh experiment metrics”. No private API key required.
+                  come from Klaviyo MCP (Claude or Cursor) via metrics ingest —
+                  no private API key. Say “Refresh Drake metrics” in the agent,
+                  or POST to `/api/customers/…/metrics/ingest`.
                   {editing
                     ? " Add / Delete experiments, then Save."
                     : " Click Edit to add or remove experiments."}
