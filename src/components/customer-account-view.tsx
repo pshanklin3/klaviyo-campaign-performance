@@ -219,6 +219,7 @@ export function CustomerAccountView({
   const [showUnlock, setShowUnlock] = useState(startEditing);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [prompt, setPrompt] = useState("");
   const [importing, setImporting] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importJson, setImportJson] = useState("");
@@ -226,6 +227,7 @@ export function CustomerAccountView({
   const [error, setError] = useState<string | null>(null);
   const [activeStorage, setActiveStorage] = useState(storageMode);
   const experimentsEndRef = useRef<HTMLDivElement | null>(null);
+  const pendingRefreshRef = useRef(false);
 
   const { overview } = plan;
 
@@ -326,12 +328,19 @@ export function CustomerAccountView({
   }
 
   async function refreshMetrics() {
+    if (!password.trim()) {
+      pendingRefreshRef.current = true;
+      setShowUnlock(true);
+      setError("Enter the CSM password to refresh metrics.");
+      return;
+    }
+    pendingRefreshRef.current = false;
     setRefreshing(true);
     setError(null);
     setStatus(null);
     try {
       const response = await fetch(
-        `/api/customers/${plan.customerId}/experiments/refresh`,
+        `/api/customers/${plan.customerId}/metrics/refresh`,
         {
           method: "POST",
           headers: {
@@ -345,6 +354,7 @@ export function CustomerAccountView({
         message?: string;
         mode?: "mcp" | "api_key";
         plan?: CustomerPlan;
+        storage?: "blob" | "file";
         results?: { id: string; name: string; ok: boolean; detail: string }[];
       } | null;
       if (!response.ok) {
@@ -353,32 +363,52 @@ export function CustomerAccountView({
             "Refresh failed",
         );
       }
-      if (body?.mode === "mcp") {
-        setShowImport(true);
-        setStatus(
-          "Ask Claude for the metrics JSON (Klaviyo MCP), then paste it below and click Apply.",
-        );
-        return;
-      }
       if (body?.plan) {
         setPlan({
           ...body.plan,
           experiments: body.plan.experiments.map(ensureExperimentMetricPull),
         });
       }
+      if (body?.storage) setActiveStorage(body.storage);
       const failed =
         body?.results?.filter((r) => !r.ok).map((r) => r.name) ?? [];
       const okCount = body?.results?.filter((r) => r.ok).length ?? 0;
       setStatus(
         failed.length
-          ? `Refreshed ${okCount}; failed: ${failed.join(", ")}`
-          : `Refreshed ${okCount} experiment metric(s) from Klaviyo.`,
+          ? `Refreshed overview; experiments: ${okCount} ok, failed: ${failed.join(", ")}`
+          : `Refreshed overview and ${okCount} experiment metric(s) from Klaviyo.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refresh failed");
     } finally {
       setRefreshing(false);
     }
+  }
+
+  function runPrompt() {
+    const text = prompt.trim().toLowerCase();
+    if (!text) {
+      setError("Type a prompt (e.g. refresh metrics) or click Refresh metrics.");
+      return;
+    }
+    if (
+      /refresh|update|pull|sync|reload/.test(text) &&
+      /metric|overview|data|number|klaviyo|revenue|everything|^refresh/.test(
+        text,
+      )
+    ) {
+      setPrompt("");
+      void refreshMetrics();
+      return;
+    }
+    if (/^refresh/.test(text) || text === "update" || text === "pull") {
+      setPrompt("");
+      void refreshMetrics();
+      return;
+    }
+    setError(
+      'Try “refresh metrics” or click Refresh metrics. Other prompts aren’t supported yet.',
+    );
   }
 
   async function applyImportedMetrics() {
@@ -515,6 +545,11 @@ export function CustomerAccountView({
     setEditing(true);
     setShowUnlock(false);
     setError(null);
+    if (pendingRefreshRef.current) {
+      setStatus("Password accepted — refreshing metrics…");
+      void refreshMetrics();
+      return;
+    }
     setStatus("Editing unlocked — change fields on this page, then Save.");
   }
 
@@ -574,21 +609,41 @@ export function CustomerAccountView({
             </Button>
           </div>
           {!editing ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="rounded-full"
-              onClick={() => {
-                setShowUnlock(true);
-                setError(null);
-              }}
-            >
-              <Pencil className="size-3.5" />
-              Edit
-            </Button>
+            <>
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full"
+                disabled={refreshing}
+                onClick={() => void refreshMetrics()}
+              >
+                {refreshing ? "Refreshing…" : "Refresh metrics"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => {
+                  setShowUnlock(true);
+                  setError(null);
+                }}
+              >
+                <Pencil className="size-3.5" />
+                Edit
+              </Button>
+            </>
           ) : (
             <>
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full"
+                disabled={refreshing || saving || importing}
+                onClick={() => void refreshMetrics()}
+              >
+                {refreshing ? "Refreshing…" : "Refresh metrics"}
+              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -598,22 +653,9 @@ export function CustomerAccountView({
                 onClick={() => {
                   setShowImport(true);
                   setError(null);
-                  setStatus(
-                    "Paste the JSON Claude gave you, then click Apply metrics.",
-                  );
                 }}
               >
-                Import metrics
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="rounded-full"
-                disabled={refreshing || saving || importing}
-                onClick={() => void refreshMetrics()}
-              >
-                {refreshing ? "Refreshing…" : "How to refresh"}
+                Import JSON
               </Button>
               <Button
                 type="button"
@@ -632,6 +674,7 @@ export function CustomerAccountView({
                 onClick={() => {
                   setEditing(false);
                   setShowUnlock(false);
+                  setShowImport(false);
                   setStatus(null);
                 }}
               >
@@ -647,8 +690,8 @@ export function CustomerAccountView({
           <CardHeader className="pb-2">
             <CardTitle className="font-heading text-lg">Unlock editing</CardTitle>
             <CardDescription>
-              CSM password required to edit and save. Default locally:{" "}
-              <code>klaviyo-csm</code>
+              CSM password required to refresh metrics or edit. Default
+              locally: <code>klaviyo-csm</code>
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -764,6 +807,45 @@ export function CustomerAccountView({
 
       {tab === "performance" ? (
         <div className="space-y-6">
+          <Card className="border-[color:var(--panel-border)] bg-[color:var(--panel)]/90">
+            <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-end">
+              <label className="flex-1">
+                <span className="text-xs font-medium text-[color:var(--ink-muted)]">
+                  Ask the page
+                </span>
+                <input
+                  className={`${inputClass} mt-1`}
+                  placeholder='e.g. “refresh metrics”'
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") runPrompt();
+                  }}
+                  disabled={refreshing}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  className="rounded-full"
+                  disabled={refreshing}
+                  onClick={() => runPrompt()}
+                >
+                  Go
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={refreshing}
+                  onClick={() => void refreshMetrics()}
+                >
+                  {refreshing ? "Refreshing…" : "Refresh metrics"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border-[color:var(--panel-border)] bg-[color:var(--panel)]/90">
             <CardHeader className="pb-3">
               <CardTitle className="font-heading text-xl">
@@ -958,9 +1040,9 @@ export function CustomerAccountView({
                   In motion · performance experiments
                 </CardTitle>
                 <CardDescription>
-                  Names, goals, and changes are CSM-edited. To refresh numbers:
-                  ask Claude (Klaviyo MCP) for metrics JSON → Edit → Import
-                  metrics → paste → Apply. No terminal or private API key.
+                  Names, goals, and changes are CSM-edited. Numbers refresh with
+                  one click (Refresh metrics) or the prompt “refresh metrics” —
+                  after KLAVIYO_PRIVATE_API_KEY is set on Vercel.
                   {editing
                     ? " Add / Delete experiments, then Save."
                     : " Click Edit to add or remove experiments."}

@@ -19,13 +19,11 @@ Customer-facing account health (Performance + Success plan). Edit fields **on th
 4. Change fields in place on the dashboard
 5. Click **Save**
 
-## Connect Klaviyo (SSO)
+## Connect Klaviyo
 
-Use **Klaviyo MCP / SSO** (Claude Desktop, Claude Code, or Cursor) for live metrics. Do not create a private API key for normal use.
+For **one-click Refresh** on the live site, add a read-only `KLAVIYO_PRIVATE_API_KEY` in Vercel (see below). That key never goes to Claude or the browser — only the server uses it.
 
-1. Authenticate the Klaviyo MCP integration in your agent.
-2. Ask it to pull / refresh performance, then **POST** to `/api/customers/…/metrics/ingest` (see below), or commit `plan.json`.
-3. Legacy campaign-table snapshot: `src/data/live-campaign-report.json` on `/`.
+Optional: Cursor / Claude can still use **Klaviyo MCP (SSO)** for ad-hoc pulls; the app’s primary customer path is the Refresh button.
 
 ## Durable Save on Vercel
 
@@ -36,76 +34,23 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 3. **Redeploy** so the token is live
 4. Edit + Save on the account page — status should say Saved to Vercel Blob
 
-## Experiment metric pulls (MCP / SSO)
+## Refresh metrics (one click)
 
-Benchmark / current values are refreshed by an agent using **Klaviyo MCP** — not a private API key on Vercel.
+On the account page: **Refresh metrics**, or type `refresh metrics` in **Ask the page** and hit Go.
 
-### Option A — Claude → paste in the app (recommended for CSMs)
+That pulls live Account Overview + experiment cards from Klaviyo and saves to Blob.
 
-1. Connect **Klaviyo MCP** in Claude (SSO).
-2. Ask Claude for metrics JSON only (no password):
+**One-time Vercel setup** (Secret env vars, then Redeploy):
 
-```
-Use Klaviyo MCP for hunter-trading / Drake Waterfowl.
-GET https://YOUR-APP.vercel.app/api/customers/hunter-trading/metrics/ingest
-for schema + experiment ids.
-Pull last_30_days, prior 30d, L7, yesterday campaign + flow reports (Placed Order).
-Compute overview + experiment before/after metrics.
-Output ONLY the finished JSON body — do not POST, do not use passwords/tokens.
-```
-
-3. On the live site: **Edit** → unlock with CSM password → **Import metrics** → paste Claude’s JSON → **Apply metrics**.
-
-Numbers update immediately (saved to Blob). No terminal.
-
-### Option B — Metrics ingest API (curl / agents that may POST)
-
-1. Connect **Klaviyo MCP** in Claude Desktop / Claude Code / Cursor (SSO).
-2. Pull campaign + flow reports (Placed Order conversion metric).
-3. POST the computed numbers (or paste via Option A):
-
-```bash
-# Schema + experiment ids
-curl -s http://127.0.0.1:43147/api/customers/hunter-trading/metrics/ingest | jq .
-
-# Ingest (CSM password — or METRICS_INGEST_TOKEN)
-curl -s -X POST http://127.0.0.1:43147/api/customers/hunter-trading/metrics/ingest \
-  -H "Content-Type: application/json" \
-  -H "x-csm-admin-password: $CSM_ADMIN_PASSWORD" \
-  -d @payload.json
-```
-
-Auth headers (any one):
-- `x-csm-admin-password` — same as Edit/Save
-- `x-metrics-ingest-token` or `Authorization: Bearer …` — set `METRICS_INGEST_TOKEN` in Vercel for agents
-
-On Vercel, ingest writes **Blob** so the live page updates immediately.
-
-### Option B — Commit `plan.json` (Cursor agent)
-
-1. In Cursor: **“Refresh experiment metrics for hunter-trading”**
-2. Agent updates `plan.json`, pushes
-3. After deploy, the live app merges those metric fields over Blob
-
-Each experiment needs `objectId` (flow message / campaign id) and `changedOn` for before/after windows.
-
-| Field | Purpose |
+| Variable | Purpose |
 | --- | --- |
-| `scope` | flow message · flow · campaign · … |
-| `objectId` | Klaviyo flow message / flow / campaign id (comma-separated OK for campaign aggregates) |
-| `changedOn` + `benchmarkDays` | Before/after windows |
-| `preset` / `goalMetricLabel` | What number to show (click rate, rev/recipient, …) |
+| `CSM_ADMIN_PASSWORD` | Unlock Edit / authorize Refresh |
+| `KLAVIYO_PRIVATE_API_KEY` | Read-only Klaviyo key so the button can pull Reporting data |
+| `BLOB_READ_WRITE_TOKEN` | Already set if Blob store is connected |
 
-### Claude prompt (copy/paste)
+Create the Klaviyo key: Klaviyo → **Settings** → **API keys** → Create Private Key (read access to metrics / reporting is enough).
 
-```
-Connect to Klaviyo MCP. For Drake Waterfowl (hunter-trading):
-1. GET /api/customers/hunter-trading/metrics/ingest on the live app for experiment ids + schema
-2. Pull last_30_days (+ prior 30d) campaign and flow reports with Placed Order
-3. Compute attributed totals, email/SMS share, campaign/flow share, and experiment before/after metrics
-4. Output ONLY the finished JSON body — do not POST and do not use any password or token
-The CSM will paste that JSON into the app (Edit → Import metrics → Apply).
-```
+Without the Klaviyo key, Refresh will show a clear setup hint. Claude MCP paste/import remains an optional fallback under Edit → Import JSON.
 
 ## Run locally
 
