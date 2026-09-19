@@ -166,7 +166,15 @@ function formatSyncedAt(value: string) {
   }
 }
 
+function hasMetricValue(value: string | undefined): boolean {
+  if (!value) return false;
+  const v = value.trim();
+  return v !== "" && v !== "—" && v !== "-" && v !== "–";
+}
+
 function MetricCard({ metric }: { metric: OverviewMetric }) {
+  if (!hasMetricValue(metric.value)) return null;
+  const showYoy = metric.yoyDeltaPct !== 0;
   return (
     <div className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4">
       <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
@@ -179,9 +187,11 @@ function MetricCard({ metric }: { metric: OverviewMetric }) {
         <span>
           vs prior <Delta value={metric.priorDeltaPct} suffix="%" />
         </span>
-        <span>
-          YoY <Delta value={metric.yoyDeltaPct} suffix="%" />
-        </span>
+        {showYoy ? (
+          <span>
+            YoY <Delta value={metric.yoyDeltaPct} suffix="%" />
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -760,16 +770,16 @@ export function CustomerAccountView({
                 Account Overview
               </CardTitle>
               <CardDescription>
-                Attributed revenue from Klaviyo Reporting (MCP). Ecom is
-                storefront-only and not available via Klaviyo — shown as —.
+                Attributed revenue from Klaviyo Reporting (MCP). Storefront
+                ecom is not available here.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard metric={overview.ecomL30} />
-                <MetricCard metric={overview.ecomYesterday} />
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
                 <MetricCard metric={overview.attributedL30} />
                 <MetricCard metric={overview.attributedYesterday} />
+                <MetricCard metric={overview.ecomL30} />
+                <MetricCard metric={overview.ecomYesterday} />
               </div>
 
               <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
@@ -777,21 +787,29 @@ export function CustomerAccountView({
                   <p className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--ink-muted)]">
                     Near-term · last 7 days
                   </p>
-                  <div className="mt-3 grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-[color:var(--ink-muted)]">
-                        Ecom
-                      </p>
-                      <p className="font-heading text-2xl font-semibold tabular-nums">
-                        {overview.ecomL7.value}
-                      </p>
-                      <div className="mt-1 text-sm">
-                        <Delta
-                          value={overview.ecomL7.priorDeltaPct}
-                          suffix="%"
-                        />
+                  <div
+                    className={`mt-3 grid gap-3 ${
+                      hasMetricValue(overview.ecomL7.value)
+                        ? "grid-cols-2"
+                        : "grid-cols-1"
+                    }`}
+                  >
+                    {hasMetricValue(overview.ecomL7.value) ? (
+                      <div>
+                        <p className="text-xs text-[color:var(--ink-muted)]">
+                          Ecom
+                        </p>
+                        <p className="font-heading text-2xl font-semibold tabular-nums">
+                          {overview.ecomL7.value}
+                        </p>
+                        <div className="mt-1 text-sm">
+                          <Delta
+                            value={overview.ecomL7.priorDeltaPct}
+                            suffix="%"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    ) : null}
                     <div>
                       <p className="text-xs text-[color:var(--ink-muted)]">
                         Attributed
@@ -853,8 +871,8 @@ export function CustomerAccountView({
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-[color:var(--ink-muted)]">
-                  Full matrix: Yesterday → YTD with prior + YoY for ecom and
-                  attributed.
+                  Full matrix: Yesterday → YTD attributed (vs prior). YoY when
+                  available.
                 </p>
                 <Button
                   type="button"
@@ -873,31 +891,42 @@ export function CustomerAccountView({
                     <TableHeader>
                       <TableRow>
                         <TableHead>Window</TableHead>
-                        <TableHead className="text-right">Ecom</TableHead>
-                        <TableHead className="text-right">Ecom prior</TableHead>
-                        <TableHead className="text-right">Ecom YoY</TableHead>
+                        {plan.periods.some((r) => hasMetricValue(r.ecom)) ? (
+                          <>
+                            <TableHead className="text-right">Ecom</TableHead>
+                            <TableHead className="text-right">
+                              Ecom prior
+                            </TableHead>
+                          </>
+                        ) : null}
                         <TableHead className="text-right">Attributed</TableHead>
                         <TableHead className="text-right">Attr prior</TableHead>
-                        <TableHead className="text-right">Attr YoY</TableHead>
+                        {plan.periods.some((r) => r.attrYoyPct !== 0) ? (
+                          <TableHead className="text-right">Attr YoY</TableHead>
+                        ) : null}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {plan.periods.map((row) => (
                         <TableRow key={row.window}>
                           <TableCell>{row.window}</TableCell>
-                          <TableCell className="text-right tabular-nums">
-                            {row.ecom}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {row.ecomPriorPct === 0 ? (
-                              "—"
-                            ) : (
-                              <Delta value={row.ecomPriorPct} suffix="%" />
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Delta value={row.ecomYoyPct} suffix="%" />
-                          </TableCell>
+                          {plan.periods.some((r) => hasMetricValue(r.ecom)) ? (
+                            <>
+                              <TableCell className="text-right tabular-nums">
+                                {row.ecom}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {row.ecomPriorPct === 0 ? (
+                                  "—"
+                                ) : (
+                                  <Delta
+                                    value={row.ecomPriorPct}
+                                    suffix="%"
+                                  />
+                                )}
+                              </TableCell>
+                            </>
+                          ) : null}
                           <TableCell className="text-right tabular-nums">
                             {row.attributed}
                           </TableCell>
@@ -908,9 +937,11 @@ export function CustomerAccountView({
                               <Delta value={row.attrPriorPct} suffix="%" />
                             )}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Delta value={row.attrYoyPct} suffix="%" />
-                          </TableCell>
+                          {plan.periods.some((r) => r.attrYoyPct !== 0) ? (
+                            <TableCell className="text-right">
+                              <Delta value={row.attrYoyPct} suffix="%" />
+                            </TableCell>
+                          ) : null}
                         </TableRow>
                       ))}
                     </TableBody>
