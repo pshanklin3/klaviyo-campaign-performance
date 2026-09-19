@@ -1,8 +1,8 @@
 {
   "customerId": "hunter-trading",
   "displayName": "Drake Waterfowl",
-  "syncedAt": "2026-09-18T23:42:02.000Z",
-  "callout": "Win-back + sunset flows are built but not activated (high priority). Cart recovery was repaired in September after zero abandonment sends through August. SMS is ~40\u201344% of Klaviyo revenue; list growth + Gmail deliverability still need attention.",
+  "syncedAt": "2026-09-19T03:24:40.000Z",
+  "callout": "Welcome SMS #1 rev/recipient is soft since Sep 11 ($33.71 vs $39.09 benchmark). Browse Abandon Email #1 click rate is up (1.80% \u2192 2.28%). Metric cards now include live Klaviyo Reporting pulls where object IDs are set.",
   "overview": {
     "ecomL30": {
       "label": "Ecom revenue \u00b7 last 30 days",
@@ -123,18 +123,18 @@
   "experiments": [
     {
       "id": "exp-browse-abandon",
-      "name": "Browse Abandon \u00b7 Email 2",
-      "klaviyoUrl": "https://www.klaviyo.com/flow/",
+      "name": "Browse Abandon \u00b7 Email 1",
+      "klaviyoUrl": "https://www.klaviyo.com/flow/UDQsmJ",
       "itemType": "Flow message",
       "goal": "Increase click rate",
       "implemented": "Moved primary CTA above the fold",
       "changedOn": "2026-09-08",
       "metricLabel": "Click rate",
-      "benchmarkValue": "1.8%",
-      "benchmarkNote": "L30 before change",
-      "currentValue": "2.4%",
-      "currentNote": "Since Sep 8",
-      "deltaPct": 33.3,
+      "benchmarkValue": "1.80%",
+      "benchmarkNote": "30d before 2026-09-08",
+      "currentValue": "2.28%",
+      "currentNote": "Since 2026-09-08",
+      "deltaPct": 26.7,
       "metricPull": {
         "scope": "flow_message",
         "preset": "click_rate",
@@ -142,31 +142,32 @@
         "metrics": [
           {
             "label": "Clicked Email",
-            "metricId": ""
+            "metricId": "HewGG4"
           }
         ],
         "combine": "custom",
-        "combineNote": "Click rate derived from Clicked Email \u00f7 recipients \u2014 paste the Clicked Email metric ID",
-        "objectId": "",
-        "objectLabel": "Browse Abandon \u00b7 Email 2",
+        "combineNote": "Click rate from Reporting API (Clicked Email \u00f7 delivered)",
+        "objectId": "R3XCYs",
+        "objectLabel": "ABB Email #1",
         "benchmarkDays": 30,
         "autoPull": true
-      }
+      },
+      "lastPulledAt": "2026-09-19T03:24:40.000Z"
     },
     {
       "id": "exp-welcome-sms",
-      "name": "Welcome Series \u00b7 SMS 1",
-      "klaviyoUrl": "https://www.klaviyo.com/flow/",
+      "name": "SMS Welcome Series \u00b7 Welcome SMS 1",
+      "klaviyoUrl": "https://www.klaviyo.com/flow/TgF6EH",
       "itemType": "Flow message",
       "goal": "Increase attributed revenue / recipient",
       "implemented": "Shortened copy + single offer link",
       "changedOn": "2026-09-11",
       "metricLabel": "Revenue / recipient",
-      "benchmarkValue": "$0.41",
-      "benchmarkNote": "L30 before change",
-      "currentValue": "$0.38",
-      "currentNote": "Since Sep 11",
-      "deltaPct": -7.3,
+      "benchmarkValue": "$39.09",
+      "benchmarkNote": "30d before 2026-09-11",
+      "currentValue": "$33.71",
+      "currentNote": "Since 2026-09-11",
+      "deltaPct": -13.8,
       "metricPull": {
         "scope": "flow_message",
         "preset": "revenue_per_recipient",
@@ -174,16 +175,17 @@
         "metrics": [
           {
             "label": "Placed Order",
-            "metricId": ""
+            "metricId": "Hf9L38"
           }
         ],
-        "combine": "custom",
-        "combineNote": "Revenue / recipient derived from Placed Order \u00f7 recipients \u2014 paste the Placed Order metric ID",
-        "objectId": "",
-        "objectLabel": "Welcome Series \u00b7 SMS 1",
+        "combine": "single",
+        "combineNote": "Revenue / recipient from Reporting API (Placed Order)",
+        "objectId": "V56Ybc",
+        "objectLabel": "Welcome SMS #1",
         "benchmarkDays": 30,
         "autoPull": true
-      }
+      },
+      "lastPulledAt": "2026-09-19T03:24:40.000Z"
     },
     {
       "id": "exp-vip-fall",

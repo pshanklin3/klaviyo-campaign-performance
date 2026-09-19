@@ -38,19 +38,25 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 
 ## Experiment metric pulls
 
-Each experiment stores **what changed** plus a flexible **goal metric**:
+Each experiment stores **what changed** plus a flexible **goal metric**.
 
 | Field | Purpose |
 | --- | --- |
 | `scope` | flow message · flow · campaign · form · segment · list · account · custom |
 | `preset` | Optional shortcut (click rate, …) or `custom` |
 | `goalMetricLabel` | What shows on the card |
-| `metrics[]` | One or more Klaviyo metrics (label + optional metric id) |
-| `combine` | single · sum · average · ratio · custom formula |
-| `objectId` | Klaviyo object id for the subject |
+| `metrics[]` | Underlying event metric(s) when needed |
+| `objectId` | Klaviyo flow message / flow / campaign id |
 | `changedOn` + `benchmarkDays` | Before/after windows |
 
-Any specific metric or aggregate of metrics can be an experiment goal — presets are shortcuts only. Benchmark / current values are display caches filled by pull later.
+**Refresh metrics** (Edit mode) calls Klaviyo Reporting API and writes Benchmark / Current.
+
+For production Refresh, set on Vercel:
+
+- `KLAVIYO_PRIVATE_API_KEY`
+- optional `KLAVIYO_CONVERSION_METRIC_ID` (defaults to Placed Order lookup)
+
+Without an API key, ask the Cursor agent (Klaviyo SSO) to refresh metrics. Rates like click rate use Reporting API stats (no separate “click rate” metric id).
 
 ## Run locally
 

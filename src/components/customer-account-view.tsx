@@ -208,6 +208,7 @@ export function CustomerAccountView({
   const [password, setPassword] = useState(defaultPassword);
   const [showUnlock, setShowUnlock] = useState(startEditing);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeStorage, setActiveStorage] = useState(storageMode);
@@ -309,6 +310,53 @@ export function CustomerAccountView({
       ...p,
       tasks: p.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
     }));
+  }
+
+  async function refreshMetrics() {
+    setRefreshing(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const response = await fetch(
+        `/api/customers/${plan.customerId}/experiments/refresh`,
+        {
+          method: "POST",
+          headers: {
+            "x-csm-admin-password": password,
+          },
+        },
+      );
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        hint?: string;
+        plan?: CustomerPlan;
+        results?: { id: string; name: string; ok: boolean; detail: string }[];
+      } | null;
+      if (!response.ok) {
+        throw new Error(
+          [body?.error, body?.hint].filter(Boolean).join(" — ") ||
+            "Refresh failed",
+        );
+      }
+      if (body?.plan) {
+        setPlan({
+          ...body.plan,
+          experiments: body.plan.experiments.map(ensureExperimentMetricPull),
+        });
+      }
+      const failed =
+        body?.results?.filter((r) => !r.ok).map((r) => r.name) ?? [];
+      const okCount = body?.results?.filter((r) => r.ok).length ?? 0;
+      setStatus(
+        failed.length
+          ? `Refreshed ${okCount}; failed: ${failed.join(", ")}`
+          : `Refreshed ${okCount} experiment metric(s) from Klaviyo.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Refresh failed");
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function save() {
@@ -444,6 +492,16 @@ export function CustomerAccountView({
             </Button>
           ) : (
             <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                disabled={refreshing || saving}
+                onClick={() => void refreshMetrics()}
+              >
+                {refreshing ? "Refreshing…" : "Refresh metrics"}
+              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -721,11 +779,11 @@ export function CustomerAccountView({
                 </CardTitle>
                 <CardDescription>
                   Names, goals, and changes are CSM-edited. Benchmark / current
-                  numbers are placeholders until Klaviyo metric pull is wired —
-                  not live account data yet.
+                  come from Klaviyo Reporting (before vs after the change date)
+                  when object IDs are set — use Refresh metrics in Edit mode.
                   {editing
-                    ? " Use Add experiment / Delete on each card, then Save."
-                    : " Click Edit to add or remove experiments."}
+                    ? " Add / Delete experiments, then Save."
+                    : " Click Edit to add, remove, or refresh."}
                 </CardDescription>
               </div>
               {editing ? (
