@@ -1,5 +1,39 @@
 export type CustomerId = string;
 
+/** What kind of Klaviyo object the experiment metric is pulled from. */
+export type ExperimentMetricScope =
+  | "flow_message"
+  | "flow"
+  | "campaign"
+  | "aggregate";
+
+/** Supported pullable metrics (extend as MCP coverage grows). */
+export type ExperimentMetricKey =
+  | "click_rate"
+  | "open_rate"
+  | "placed_order_rate"
+  | "attributed_revenue"
+  | "revenue_per_recipient"
+  | "recipients"
+  | "unsubscribe_rate";
+
+/**
+ * How to resolve benchmark vs current for an experiment.
+ * Values on the card are filled by a Klaviyo pull using this config —
+ * not typed in by hand (except temporary manual override).
+ */
+export type ExperimentMetricPull = {
+  scope: ExperimentMetricScope;
+  metricKey: ExperimentMetricKey;
+  /** Flow message / flow / campaign id (or empty for account aggregate). */
+  objectId: string;
+  objectLabel?: string;
+  /** Lookback window ending at changedOn for the benchmark. */
+  benchmarkDays: number;
+  /** When false, card values can be edited manually as a fallback. */
+  autoPull: boolean;
+};
+
 export type Experiment = {
   id: string;
   name: string;
@@ -7,13 +41,17 @@ export type Experiment = {
   itemType: "Flow message" | "Campaign" | "Form" | "Other";
   goal: string;
   implemented: string;
+  /** Go-live / change date — also the split for before vs after metrics. */
   changedOn: string;
+  metricPull: ExperimentMetricPull;
+  /** Cached display fields — written by pull (or manual if autoPull is false). */
   metricLabel: string;
   benchmarkValue: string;
   benchmarkNote: string;
   currentValue: string;
   currentNote: string;
   deltaPct: number;
+  lastPulledAt?: string;
 };
 
 export type Goal = {

@@ -134,7 +134,15 @@
       "benchmarkNote": "L30 before change",
       "currentValue": "2.4%",
       "currentNote": "Since Sep 8",
-      "deltaPct": 33.3
+      "deltaPct": 33.3,
+      "metricPull": {
+        "scope": "flow_message",
+        "metricKey": "click_rate",
+        "objectId": "",
+        "objectLabel": "Browse Abandon \u00b7 Email 2",
+        "benchmarkDays": 30,
+        "autoPull": true
+      }
     },
     {
       "id": "exp-welcome-sms",
@@ -149,7 +157,15 @@
       "benchmarkNote": "L30 before change",
       "currentValue": "$0.38",
       "currentNote": "Since Sep 11",
-      "deltaPct": -7.3
+      "deltaPct": -7.3,
+      "metricPull": {
+        "scope": "flow_message",
+        "metricKey": "revenue_per_recipient",
+        "objectId": "",
+        "objectLabel": "Welcome Series \u00b7 SMS 1",
+        "benchmarkDays": 30,
+        "autoPull": true
+      }
     },
     {
       "id": "exp-vip-fall",
@@ -164,7 +180,15 @@
       "benchmarkNote": "Prior VIP sends L30",
       "currentValue": "19.6%",
       "currentNote": "This send",
-      "deltaPct": 8.9
+      "deltaPct": 8.9,
+      "metricPull": {
+        "scope": "campaign",
+        "metricKey": "click_rate",
+        "objectId": "",
+        "objectLabel": "VIP early access \u00b7 Fall drop",
+        "benchmarkDays": 30,
+        "autoPull": true
+      }
     }
   ],
   "goals": [

@@ -36,6 +36,20 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 3. **Redeploy** so the token is live
 4. Edit + Save on the account page — status should say Saved to Vercel Blob
 
+## Experiment metric pulls
+
+Each experiment stores **what changed** (name, goal, implemented, change date) plus a **metric pull config**:
+
+| Field | Purpose |
+| --- | --- |
+| `scope` | `flow_message` · `flow` · `campaign` · `aggregate` |
+| `metricKey` | e.g. click rate, rev / recipient |
+| `objectId` | Klaviyo message / flow / campaign id |
+| `benchmarkDays` | Lookback ending at `changedOn` |
+| `changedOn` | Split date: before = benchmark, after = current |
+
+Benchmark / current values on the card are display caches — not hand-edited when auto-pull is on. Klaviyo SSO refresh will fill them next.
+
 ## Run locally
 
 ```bash

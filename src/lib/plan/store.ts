@@ -1,6 +1,7 @@
 import { get, list, put } from "@vercel/blob";
 import { promises as fs } from "fs";
 import path from "path";
+import { ensureExperimentMetricPull } from "./experiment-metrics";
 import type { CustomerPlan } from "./types";
 import { emptyPlan } from "./types";
 
@@ -96,8 +97,12 @@ export async function getCustomerPlan(
   customerId: string,
 ): Promise<CustomerPlan | null> {
   const fromBlob = await readPlanFromBlob(customerId);
-  if (fromBlob) return fromBlob;
-  return readPlanFromFile(customerId);
+  const plan = fromBlob ?? (await readPlanFromFile(customerId));
+  if (!plan) return null;
+  return {
+    ...plan,
+    experiments: plan.experiments.map(ensureExperimentMetricPull),
+  };
 }
 
 export async function saveCustomerPlan(

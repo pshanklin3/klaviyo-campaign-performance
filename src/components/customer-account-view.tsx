@@ -21,10 +21,20 @@ import {
 import type {
   CustomerPlan,
   Experiment,
+  ExperimentMetricKey,
+  ExperimentMetricScope,
   Goal,
   OverviewMetric,
   Task,
 } from "@/lib/plan/types";
+import {
+  METRIC_KEY_OPTIONS,
+  METRIC_SCOPE_OPTIONS,
+  defaultMetricPull,
+  describeMetricWindows,
+  ensureExperimentMetricPull,
+  metricKeyLabel,
+} from "@/lib/plan/experiment-metrics";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -140,7 +150,10 @@ export function CustomerAccountView({
   defaultPassword?: string;
   startEditing?: boolean;
 }) {
-  const [plan, setPlan] = useState<CustomerPlan>(initialPlan);
+  const [plan, setPlan] = useState<CustomerPlan>(() => ({
+    ...initialPlan,
+    experiments: initialPlan.experiments.map(ensureExperimentMetricPull),
+  }));
   const [tab, setTab] = useState<Tab>("performance");
   const [showAllPeriods, setShowAllPeriods] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -164,7 +177,34 @@ export function CustomerAccountView({
     }));
   }
 
+  function updateMetricPull(
+    id: string,
+    patch: Partial<Experiment["metricPull"]>,
+  ) {
+    setPlan((p) => ({
+      ...p,
+      experiments: p.experiments.map((e) => {
+        if (e.id !== id) return e;
+        const metricPull = { ...ensureExperimentMetricPull(e).metricPull, ...patch };
+        const metricLabel = metricKeyLabel(metricPull.metricKey);
+        const windows = describeMetricWindows({
+          ...e,
+          metricPull,
+        });
+        return {
+          ...e,
+          metricPull,
+          metricLabel,
+          benchmarkNote: windows.benchmark,
+          currentNote: windows.current,
+        };
+      }),
+    }));
+  }
+
   function addExperiment() {
+    const changedOn = new Date().toISOString().slice(0, 10);
+    const metricPull = defaultMetricPull("Flow message");
     const experiment: Experiment = {
       id: newId("exp"),
       name: "New experiment",
@@ -172,12 +212,13 @@ export function CustomerAccountView({
       itemType: "Flow message",
       goal: "Increase click rate",
       implemented: "",
-      changedOn: new Date().toISOString().slice(0, 10),
-      metricLabel: "Click rate",
-      benchmarkValue: "",
-      benchmarkNote: "L30 before change",
-      currentValue: "",
-      currentNote: "Since change",
+      changedOn,
+      metricPull,
+      metricLabel: metricKeyLabel(metricPull.metricKey),
+      benchmarkValue: "—",
+      benchmarkNote: `${metricPull.benchmarkDays}d before ${changedOn}`,
+      currentValue: "—",
+      currentNote: `Since ${changedOn}`,
       deltaPct: 0,
     };
     setPlan((p) => ({ ...p, experiments: [experiment, ...p.experiments] }));
@@ -295,8 +336,9 @@ export function CustomerAccountView({
             </h1>
           )}
           <p className="max-w-2xl text-sm text-[color:var(--ink-soft)]">
-            Account health + success plan. Metrics stay read-only; Edit unlocks
-            callouts, experiments, goals, tasks, and meeting notes.
+            Account overview metrics stay read-only. Edit unlocks experiments
+            (name, goal, change + which Klaviyo metric to pull), continue /
+            investigate, and the success plan.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -405,8 +447,8 @@ export function CustomerAccountView({
       {editing ? (
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2 rounded-2xl border border-[color:var(--panel-border)] bg-[color:var(--panel)]/95 px-4 py-3 backdrop-blur">
           <p className="mr-auto text-sm text-[color:var(--ink-soft)]">
-            Editing success-plan fields · metrics stay locked · Save writes to{" "}
-            {activeStorage === "blob" ? "Vercel Blob" : "plan.json"}
+            Edit cards & success plan · configure metric pull (values not typed)
+            · Save → {activeStorage === "blob" ? "Vercel Blob" : "plan.json"}
           </p>
           <Button
             type="button"
@@ -612,8 +654,9 @@ export function CustomerAccountView({
                   In motion · performance experiments
                 </CardTitle>
                 <CardDescription>
-                  Active work — benchmark before the change vs current since
-                  go-live
+                  Editable: what changed. Benchmark / current come from the
+                  metric pull (flow message, campaign, or aggregate) around the
+                  change date.
                 </CardDescription>
               </div>
               {editing ? (
@@ -636,7 +679,11 @@ export function CustomerAccountView({
                   {editing ? " Click Add to create one." : " Click Edit to add."}
                 </p>
               ) : (
-                plan.experiments.map((item) => (
+                plan.experiments.map((raw) => {
+                  const item = ensureExperimentMetricPull(raw);
+                  const pull = item.metricPull;
+                  const windows = describeMetricWindows(item);
+                  return (
                   <div
                     key={item.id}
                     className="rounded-2xl border border-[color:var(--panel-border)] bg-white/70 p-4"
@@ -649,27 +696,38 @@ export function CustomerAccountView({
                               <select
                                 className={inputClass}
                                 value={item.itemType}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    itemType: e.target
-                                      .value as Experiment["itemType"],
-                                  })
-                                }
+                                onChange={(e) => {
+                                  const itemType = e.target
+                                    .value as Experiment["itemType"];
+                                  updateExperiment(item.id, { itemType });
+                                  updateMetricPull(item.id, {
+                                    scope:
+                                      itemType === "Campaign"
+                                        ? "campaign"
+                                        : itemType === "Flow message"
+                                          ? "flow_message"
+                                          : pull.scope,
+                                  });
+                                }}
                               >
                                 <option>Flow message</option>
                                 <option>Campaign</option>
                                 <option>Form</option>
                                 <option>Other</option>
                               </select>
-                              <input
-                                className={`${inputClass} w-36`}
-                                value={item.changedOn}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    changedOn: e.target.value,
-                                  })
-                                }
-                              />
+                              <label className="flex items-center gap-1 text-xs text-[color:var(--ink-muted)]">
+                                Changed
+                                <input
+                                  type="date"
+                                  className={`${inputClass} w-40`}
+                                  value={item.changedOn}
+                                  onChange={(e) =>
+                                    updateExperiment(item.id, {
+                                      changedOn: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
                               <Button
                                 type="button"
                                 size="sm"
@@ -742,6 +800,147 @@ export function CustomerAccountView({
                               }
                               placeholder="Implemented change"
                             />
+                            <div className="space-y-2 rounded-xl border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel)]/60 p-3">
+                              <p className="text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
+                                Metric to pull
+                              </p>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-[color:var(--ink-muted)]">
+                                    Source
+                                  </span>
+                                  <select
+                                    className={inputClass}
+                                    value={pull.scope}
+                                    onChange={(e) =>
+                                      updateMetricPull(item.id, {
+                                        scope: e.target
+                                          .value as ExperimentMetricScope,
+                                      })
+                                    }
+                                  >
+                                    {METRIC_SCOPE_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-[color:var(--ink-muted)]">
+                                    Metric
+                                  </span>
+                                  <select
+                                    className={inputClass}
+                                    value={pull.metricKey}
+                                    onChange={(e) =>
+                                      updateMetricPull(item.id, {
+                                        metricKey: e.target
+                                          .value as ExperimentMetricKey,
+                                      })
+                                    }
+                                  >
+                                    {METRIC_KEY_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-[color:var(--ink-muted)]">
+                                    Klaviyo object ID
+                                  </span>
+                                  <input
+                                    className={inputClass}
+                                    value={pull.objectId}
+                                    onChange={(e) =>
+                                      updateMetricPull(item.id, {
+                                        objectId: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Message / flow / campaign id"
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-[color:var(--ink-muted)]">
+                                    Benchmark days before change
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    className={inputClass}
+                                    value={pull.benchmarkDays}
+                                    onChange={(e) =>
+                                      updateMetricPull(item.id, {
+                                        benchmarkDays:
+                                          Number(e.target.value) || 30,
+                                      })
+                                    }
+                                  />
+                                </label>
+                              </div>
+                              <p className="text-xs text-[color:var(--ink-soft)]">
+                                {
+                                  METRIC_SCOPE_OPTIONS.find(
+                                    (o) => o.value === pull.scope,
+                                  )?.hint
+                                }{" "}
+                                · Windows: {windows.benchmark} →{" "}
+                                {windows.current}. Auto-pull from Klaviyo SSO
+                                lands next; values below stay display-only until
+                                then.
+                              </p>
+                              <label className="flex items-center gap-2 text-xs text-[color:var(--ink-soft)]">
+                                <input
+                                  type="checkbox"
+                                  checked={pull.autoPull}
+                                  onChange={(e) =>
+                                    updateMetricPull(item.id, {
+                                      autoPull: e.target.checked,
+                                    })
+                                  }
+                                />
+                                Auto-pull values (uncheck only for temporary
+                                manual override)
+                              </label>
+                              {!pull.autoPull ? (
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                  <input
+                                    className={inputClass}
+                                    value={item.benchmarkValue}
+                                    onChange={(e) =>
+                                      updateExperiment(item.id, {
+                                        benchmarkValue: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Benchmark value"
+                                  />
+                                  <input
+                                    className={inputClass}
+                                    value={item.currentValue}
+                                    onChange={(e) =>
+                                      updateExperiment(item.id, {
+                                        currentValue: e.target.value,
+                                      })
+                                    }
+                                    placeholder="Current value"
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    className={inputClass}
+                                    value={item.deltaPct}
+                                    onChange={(e) =>
+                                      updateExperiment(item.id, {
+                                        deltaPct: Number(e.target.value) || 0,
+                                      })
+                                    }
+                                    placeholder="Delta %"
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
                           </>
                         ) : (
                           <>
@@ -774,102 +973,32 @@ export function CustomerAccountView({
                           <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
                             Benchmark
                           </p>
-                          {editing ? (
-                            <>
-                              <input
-                                className={inputClass}
-                                value={item.benchmarkValue}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    benchmarkValue: e.target.value,
-                                  })
-                                }
-                              />
-                              <input
-                                className={inputClass}
-                                value={item.metricLabel}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    metricLabel: e.target.value,
-                                  })
-                                }
-                                placeholder="Metric"
-                              />
-                              <input
-                                className={inputClass}
-                                value={item.benchmarkNote}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    benchmarkNote: e.target.value,
-                                  })
-                                }
-                              />
-                            </>
-                          ) : (
-                            <>
-                              <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
-                                {item.benchmarkValue}
-                              </p>
-                              <p className="text-xs text-[color:var(--ink-muted)]">
-                                {item.metricLabel} · {item.benchmarkNote}
-                              </p>
-                            </>
-                          )}
+                          <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
+                            {item.benchmarkValue || "—"}
+                          </p>
+                          <p className="text-xs text-[color:var(--ink-muted)]">
+                            {item.metricLabel} · {item.benchmarkNote}
+                          </p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
                             Current
                           </p>
-                          {editing ? (
-                            <>
-                              <input
-                                className={inputClass}
-                                value={item.currentValue}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    currentValue: e.target.value,
-                                  })
-                                }
-                              />
-                              <input
-                                className={inputClass}
-                                value={item.currentNote}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    currentNote: e.target.value,
-                                  })
-                                }
-                              />
-                              <input
-                                type="number"
-                                step="0.1"
-                                className={inputClass}
-                                value={item.deltaPct}
-                                onChange={(e) =>
-                                  updateExperiment(item.id, {
-                                    deltaPct: Number(e.target.value) || 0,
-                                  })
-                                }
-                              />
-                            </>
-                          ) : (
-                            <>
-                              <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
-                                {item.currentValue}
-                              </p>
-                              <p className="text-xs text-[color:var(--ink-muted)]">
-                                {item.currentNote}
-                              </p>
-                              <div className="mt-1 text-sm">
-                                <Delta value={item.deltaPct} suffix="%" />
-                              </div>
-                            </>
-                          )}
+                          <p className="mt-1 font-heading text-xl font-semibold tabular-nums">
+                            {item.currentValue || "—"}
+                          </p>
+                          <p className="text-xs text-[color:var(--ink-muted)]">
+                            {item.currentNote}
+                          </p>
+                          <div className="mt-1 text-sm">
+                            <Delta value={item.deltaPct} suffix="%" />
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </CardContent>
           </Card>
