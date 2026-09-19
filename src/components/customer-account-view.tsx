@@ -352,12 +352,25 @@ export function CustomerAccountView({
         error?: string;
         hint?: string;
         message?: string;
-        mode?: "mcp" | "api_key";
+        mode?: "mcp" | "api_key" | "mcp_required";
         plan?: CustomerPlan;
         storage?: "blob" | "file";
         results?: { id: string; name: string; ok: boolean; detail: string }[];
       } | null;
       if (!response.ok) {
+        const needsMcp =
+          body?.mode === "mcp_required" ||
+          /MCP|Cursor|OAuth/i.test(
+            [body?.error, body?.hint].filter(Boolean).join(" "),
+          );
+        if (needsMcp) {
+          setStatus(
+            body?.hint ||
+              'Ask Cursor: “Refresh Drake metrics for hunter-trading” (Klaviyo MCP / SSO). No customer private API key.',
+          );
+          setError(null);
+          return;
+        }
         throw new Error(
           [body?.error, body?.hint].filter(Boolean).join(" — ") ||
             "Refresh failed",
@@ -1040,9 +1053,9 @@ export function CustomerAccountView({
                   In motion · performance experiments
                 </CardTitle>
                 <CardDescription>
-                  Names, goals, and changes are CSM-edited. Numbers refresh with
-                  one click (Refresh metrics) or the prompt “refresh metrics” —
-                  after KLAVIYO_PRIVATE_API_KEY is set on Vercel.
+                  Names, goals, and changes are CSM-edited. Metric numbers are
+                  refreshed by Cursor with Klaviyo MCP (SSO) — say “Refresh
+                  Drake metrics”. No customer private API key.
                   {editing
                     ? " Add / Delete experiments, then Save."
                     : " Click Edit to add or remove experiments."}

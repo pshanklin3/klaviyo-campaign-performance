@@ -21,9 +21,7 @@ Customer-facing account health (Performance + Success plan). Edit fields **on th
 
 ## Connect Klaviyo
 
-For **one-click Refresh** on the live site, add a read-only `KLAVIYO_PRIVATE_API_KEY` in Vercel (see below). That key never goes to Claude or the browser — only the server uses it.
-
-Optional: Cursor / Claude can still use **Klaviyo MCP (SSO)** for ad-hoc pulls; the app’s primary customer path is the Refresh button.
+Use **Klaviyo MCP / SSO in Cursor** to refresh live metrics. Do **not** store the customer’s private API key in Vercel.
 
 ## Durable Save on Vercel
 
@@ -34,23 +32,19 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 3. **Redeploy** so the token is live
 4. Edit + Save on the account page — status should say Saved to Vercel Blob
 
-## Refresh metrics (one click)
+## Refresh metrics
 
-On the account page: **Refresh metrics**, or type `refresh metrics` in **Ask the page** and hit Go.
+**Do not put the customer’s Klaviyo private API key in Vercel.**
 
-That pulls live Account Overview + experiment cards from Klaviyo and saves to Blob.
+CSMs refresh live numbers through **Cursor + Klaviyo MCP (SSO)**:
 
-**One-time Vercel setup** (Secret env vars, then Redeploy):
+1. In Cursor on this project, say: **Refresh Drake metrics for hunter-trading**
+2. The agent pulls Account Overview + experiments via MCP and updates `plan.json` (and Blob when available)
+3. After deploy / Blob save, `/c/hunter-trading` shows the new numbers
 
-| Variable | Purpose |
-| --- | --- |
-| `CSM_ADMIN_PASSWORD` | Unlock Edit / authorize Refresh |
-| `KLAVIYO_PRIVATE_API_KEY` | Read-only Klaviyo key so the button can pull Reporting data |
-| `BLOB_READ_WRITE_TOKEN` | Already set if Blob store is connected |
+The **Refresh metrics** button / “Ask the page” prompt on the site will say the same if no server-side Klaviyo connection is configured.
 
-Create the Klaviyo key: Klaviyo → **Settings** → **API keys** → Create Private Key (read access to metrics / reporting is enough).
-
-Without the Klaviyo key, Refresh will show a clear setup hint. Claude MCP paste/import remains an optional fallback under Edit → Import JSON.
+Optional later: Klaviyo **OAuth Connect** in the app (customer authorizes once) so Refresh works in-browser without a private key.
 
 ## Run locally
 

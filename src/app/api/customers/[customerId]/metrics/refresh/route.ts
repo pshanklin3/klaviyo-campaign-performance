@@ -35,8 +35,9 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Klaviyo not connected on the server",
-        hint: "In Vercel → Settings → Environment Variables, add KLAVIYO_PRIVATE_API_KEY as a Secret (read-only key from Klaviyo → Settings → API keys), then Redeploy. After that, Refresh metrics works with one click.",
+        error: "One-click pull isn’t available without a Klaviyo connection on the server",
+        hint: "Do not use the customer’s private API key. Ask Cursor (Klaviyo MCP / SSO): “Refresh Drake metrics for hunter-trading” — the agent pulls via MCP and updates the live plan. Or connect Klaviyo OAuth later for true in-app Refresh.",
+        mode: "mcp_required",
       },
       { status: 400 },
     );
