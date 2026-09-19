@@ -90,8 +90,15 @@ async function attributedFor(
   const campaigns = await fetchCampaignValuesReport({
     conversionMetricId,
     timeframe,
+    includeValueStats: true,
+    requireValueStats: true,
   });
-  const flows = await fetchFlowValuesReport({ conversionMetricId, timeframe });
+  const flows = await fetchFlowValuesReport({
+    conversionMetricId,
+    timeframe,
+    includeValueStats: true,
+    requireValueStats: true,
+  });
   const camp = sumConversion(campaigns);
   const flow = sumConversion(flows);
   const campCh = byChannel(campaigns);
@@ -133,8 +140,13 @@ export async function pullAttributedMetrics(plan: CustomerPlan): Promise<{
       oldDelta <= -99.9 ? 0 : oldCurrent / (1 + oldDelta / 100);
   }
 
-  // Optional live prior if we still have budget callers — kept separate for speed.
-  // Reconstructing prior from last card keeps this pass to 2 report calls.
+  // Empty attributed is almost never real for this account — fail the pass
+  // instead of writing $0 over good figures.
+  if (l30.total <= 0) {
+    throw new Error(
+      "Attributed L30 pull returned $0 (campaign/flow conversion_value missing). Not saving — retry after rate-limit wait.",
+    );
+  }
 
   const emailShare =
     l30.total > 0 ? Math.round((l30.email / l30.total) * 100) : 50;

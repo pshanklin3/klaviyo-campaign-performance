@@ -355,6 +355,8 @@ export async function fetchFlowValuesReport(options: {
   filters?: string;
   /** Default true. Set false for rate-only pulls to avoid extra retries. */
   includeValueStats?: boolean;
+  /** When true, do not fall back to a rates-only report (avoids $0 revenue). */
+  requireValueStats?: boolean;
 }): Promise<FlowReportRow[]> {
   const includeValueStats = options.includeValueStats !== false;
   const attributes: {
@@ -390,7 +392,11 @@ export async function fetchFlowValuesReport(options: {
     return report.data.attributes.results ?? [];
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (!includeValueStats || !message.toLowerCase().includes("value")) {
+    if (
+      options.requireValueStats ||
+      !includeValueStats ||
+      !message.toLowerCase().includes("value")
+    ) {
       throw error;
     }
     const report = await klaviyoFetch<{
@@ -418,6 +424,7 @@ export async function fetchCampaignValuesReport(options: {
   timeframe: Timeframe;
   filters?: string;
   includeValueStats?: boolean;
+  requireValueStats?: boolean;
 }): Promise<CampaignReportRow[]> {
   const includeValueStats = options.includeValueStats !== false;
   const baseAttributes = {
@@ -445,7 +452,11 @@ export async function fetchCampaignValuesReport(options: {
     return report.data.attributes.results ?? [];
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (!includeValueStats || !message.toLowerCase().includes("value")) {
+    if (
+      options.requireValueStats ||
+      !includeValueStats ||
+      !message.toLowerCase().includes("value")
+    ) {
       throw error;
     }
     const report = await klaviyoFetch<{

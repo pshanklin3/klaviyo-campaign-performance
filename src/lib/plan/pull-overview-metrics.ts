@@ -102,16 +102,44 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   const priorL30Start = new Date(priorL30End);
   priorL30Start.setUTCDate(priorL30Start.getUTCDate() - 30);
 
-  // Core ecom windows only (6 calls, up to 3 in flight) — skip MTD live pull
-  const [ecomL30, ecomPrior30, ecomL7, ecomPrior7, ecomYday, ecomYdayPrior] =
-    await Promise.all([
-      rangeSum(conversionMetricId, l30Start, today),
-      rangeSum(conversionMetricId, priorL30Start, priorL30End),
-      rangeSum(conversionMetricId, l7Start, today),
-      rangeSum(conversionMetricId, priorL7Start, priorL7End),
-      rangeSum(conversionMetricId, yday, ydayEnd),
-      rangeSum(conversionMetricId, ydayWeekAgo, ydayWeekAgoEnd),
-    ]);
+  const mtdStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  const priorMtdEnd = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0),
+  );
+  const priorMtdStart = new Date(
+    Date.UTC(priorMtdEnd.getUTCFullYear(), priorMtdEnd.getUTCMonth(), 1),
+  );
+  const dayOfMonth = now.getUTCDate();
+  const priorMtdSameDayEnd = new Date(
+    Date.UTC(
+      priorMtdStart.getUTCFullYear(),
+      priorMtdStart.getUTCMonth(),
+      Math.min(dayOfMonth, priorMtdEnd.getUTCDate()) + 1,
+    ),
+  );
+
+  // Ecom windows via metric-aggregates (cheap vs values-reports)
+  const [
+    ecomL30,
+    ecomPrior30,
+    ecomL7,
+    ecomPrior7,
+    ecomYday,
+    ecomYdayPrior,
+    ecomMtd,
+    ecomPriorMtd,
+  ] = await Promise.all([
+    rangeSum(conversionMetricId, l30Start, today),
+    rangeSum(conversionMetricId, priorL30Start, priorL30End),
+    rangeSum(conversionMetricId, l7Start, today),
+    rangeSum(conversionMetricId, priorL7Start, priorL7End),
+    rangeSum(conversionMetricId, yday, ydayEnd),
+    rangeSum(conversionMetricId, ydayWeekAgo, ydayWeekAgoEnd),
+    rangeSum(conversionMetricId, mtdStart, today),
+    rangeSum(conversionMetricId, priorMtdStart, priorMtdSameDayEnd),
+  ]);
 
   const priorPeriod = (window: string) =>
     plan.periods.find((p) => p.window === window);
@@ -144,19 +172,10 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     };
   };
 
-  const mtdPrev = priorPeriod("MTD");
   const periods: PeriodRow[] = [
     period("Yesterday", ecomYday, ecomYdayPrior),
     period("Last 7 days", ecomL7, ecomPrior7),
-    {
-      window: "MTD",
-      ecom: mtdPrev?.ecom ?? "—",
-      ecomPriorPct: mtdPrev?.ecomPriorPct ?? 0,
-      ecomYoyPct: 0,
-      attributed: mtdPrev?.attributed ?? "—",
-      attrPriorPct: mtdPrev?.attrPriorPct ?? 0,
-      attrYoyPct: 0,
-    },
+    period("MTD", ecomMtd, ecomPriorMtd),
     period("Last 30 days", ecomL30, ecomPrior30),
   ];
 
@@ -178,7 +197,7 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   const callout =
     `Live Klaviyo ecom (Placed Order) L30 is ${formatMoney(ecomL30)} ` +
     `(${pctDelta(ecomL30, ecomPrior30) >= 0 ? "+" : ""}${pctDelta(ecomL30, ecomPrior30)}% vs prior 30d). ` +
-    `Attributed figures kept from last pull (campaign/flow reports are rate-limited).`;
+    `Attributed figures from last attributed pass (campaign/flow reports).`;
 
   return { overview, periods, callout };
 }
