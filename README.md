@@ -38,17 +38,19 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 
 ## Experiment metric pulls
 
-Each experiment stores **what changed** (name, goal, implemented, change date) plus a **metric pull config**:
+Each experiment stores **what changed** plus a flexible **goal metric**:
 
 | Field | Purpose |
 | --- | --- |
-| `scope` | `flow_message` · `flow` · `campaign` · `aggregate` |
-| `metricKey` | e.g. click rate, rev / recipient |
-| `objectId` | Klaviyo message / flow / campaign id |
-| `benchmarkDays` | Lookback ending at `changedOn` |
-| `changedOn` | Split date: before = benchmark, after = current |
+| `scope` | flow message · flow · campaign · form · segment · list · account · custom |
+| `preset` | Optional shortcut (click rate, …) or `custom` |
+| `goalMetricLabel` | What shows on the card |
+| `metrics[]` | One or more Klaviyo metrics (label + optional metric id) |
+| `combine` | single · sum · average · ratio · custom formula |
+| `objectId` | Klaviyo object id for the subject |
+| `changedOn` + `benchmarkDays` | Before/after windows |
 
-Benchmark / current values on the card are display caches — not hand-edited when auto-pull is on. Klaviyo SSO refresh will fill them next.
+Any specific metric or aggregate of metrics can be an experiment goal — presets are shortcuts only. Benchmark / current values are display caches filled by pull later.
 
 ## Run locally
 

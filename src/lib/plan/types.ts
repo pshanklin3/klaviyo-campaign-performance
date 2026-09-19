@@ -1,31 +1,52 @@
 export type CustomerId = string;
 
-/** What kind of Klaviyo object the experiment metric is pulled from. */
+/** Where the experiment subject / metric lives in Klaviyo. */
 export type ExperimentMetricScope =
   | "flow_message"
   | "flow"
   | "campaign"
-  | "aggregate";
+  | "form"
+  | "segment"
+  | "list"
+  | "account"
+  | "custom";
 
-/** Supported pullable metrics (extend as MCP coverage grows). */
-export type ExperimentMetricKey =
-  | "click_rate"
-  | "open_rate"
-  | "placed_order_rate"
-  | "attributed_revenue"
-  | "revenue_per_recipient"
-  | "recipients"
-  | "unsubscribe_rate";
+/** How multiple metric refs roll up into the experiment goal number. */
+export type ExperimentMetricCombine =
+  | "single"
+  | "sum"
+  | "average"
+  | "ratio"
+  | "custom";
+
+/** One Klaviyo (or derived) metric contributing to the goal. */
+export type ExperimentMetricRef = {
+  /** Optional Klaviyo metric id when known. */
+  metricId?: string;
+  /** Human label, e.g. "Clicked Email" or "Attributed revenue". */
+  label: string;
+};
 
 /**
  * How to resolve benchmark vs current for an experiment.
- * Values on the card are filled by a Klaviyo pull using this config —
- * not typed in by hand (except temporary manual override).
+ * Any single metric or aggregate of metrics can be the goal —
+ * presets are shortcuts only, not an exhaustive list.
  */
 export type ExperimentMetricPull = {
   scope: ExperimentMetricScope;
-  metricKey: ExperimentMetricKey;
-  /** Flow message / flow / campaign id (or empty for account aggregate). */
+  /**
+   * Optional preset shortcut id (click_rate, …) or "custom".
+   * The real definition is goalMetricLabel + metrics + combine.
+   */
+  preset: string;
+  /** What shows on the card as the goal metric name. */
+  goalMetricLabel: string;
+  /** One or more metrics that compose the goal. */
+  metrics: ExperimentMetricRef[];
+  combine: ExperimentMetricCombine;
+  /** Free-text formula when combine is custom, e.g. "email attr + SMS attr". */
+  combineNote?: string;
+  /** Flow message / flow / campaign / form / segment id (or empty for account). */
   objectId: string;
   objectLabel?: string;
   /** Lookback window ending at changedOn for the benchmark. */
@@ -34,11 +55,21 @@ export type ExperimentMetricPull = {
   autoPull: boolean;
 };
 
+export type ExperimentItemType =
+  | "Flow message"
+  | "Campaign"
+  | "Form"
+  | "SMS"
+  | "Segment"
+  | "List"
+  | "Account"
+  | "Other";
+
 export type Experiment = {
   id: string;
   name: string;
   klaviyoUrl: string;
-  itemType: "Flow message" | "Campaign" | "Form" | "Other";
+  itemType: ExperimentItemType;
   goal: string;
   implemented: string;
   /** Go-live / change date — also the split for before vs after metrics. */

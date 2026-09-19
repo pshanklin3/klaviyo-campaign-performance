@@ -1,9 +1,22 @@
 import type {
   Experiment,
-  ExperimentMetricKey,
+  ExperimentItemType,
+  ExperimentMetricCombine,
   ExperimentMetricPull,
+  ExperimentMetricRef,
   ExperimentMetricScope,
 } from "./types";
+
+export const EXPERIMENT_ITEM_TYPE_OPTIONS: ExperimentItemType[] = [
+  "Flow message",
+  "Campaign",
+  "Form",
+  "SMS",
+  "Segment",
+  "List",
+  "Account",
+  "Other",
+];
 
 export const METRIC_SCOPE_OPTIONS: {
   value: ExperimentMetricScope;
@@ -13,7 +26,7 @@ export const METRIC_SCOPE_OPTIONS: {
   {
     value: "flow_message",
     label: "Flow message",
-    hint: "One message inside a flow (e.g. Browse Abandon Email 2)",
+    hint: "One message inside a flow",
   },
   {
     value: "flow",
@@ -26,14 +39,46 @@ export const METRIC_SCOPE_OPTIONS: {
     hint: "A single campaign send",
   },
   {
-    value: "aggregate",
+    value: "form",
+    label: "Signup form",
+    hint: "Form submit / conversion metrics",
+  },
+  {
+    value: "segment",
+    label: "Segment",
+    hint: "Segment size or engagement for a segment",
+  },
+  {
+    value: "list",
+    label: "List",
+    hint: "List growth / subscribe metrics",
+  },
+  {
+    value: "account",
     label: "Account aggregate",
-    hint: "Account-level metric (not tied to one message)",
+    hint: "Account-level metric(s), not tied to one message",
+  },
+  {
+    value: "custom",
+    label: "Custom / other",
+    hint: "Anything else — describe the object and metrics below",
   },
 ];
 
-export const METRIC_KEY_OPTIONS: {
-  value: ExperimentMetricKey;
+export const METRIC_COMBINE_OPTIONS: {
+  value: ExperimentMetricCombine;
+  label: string;
+}[] = [
+  { value: "single", label: "Single metric" },
+  { value: "sum", label: "Sum of metrics" },
+  { value: "average", label: "Average of metrics" },
+  { value: "ratio", label: "Ratio (first ÷ second)" },
+  { value: "custom", label: "Custom formula" },
+];
+
+/** Common shortcuts only — not an exhaustive catalog. */
+export const METRIC_PRESET_OPTIONS: {
+  value: string;
   label: string;
   format: "percent" | "currency" | "number";
 }[] = [
@@ -56,24 +101,64 @@ export const METRIC_KEY_OPTIONS: {
     label: "Unsubscribe rate",
     format: "percent",
   },
+  { value: "custom", label: "Custom metric / aggregate…", format: "number" },
 ];
 
-export function metricKeyLabel(key: ExperimentMetricKey): string {
-  return METRIC_KEY_OPTIONS.find((o) => o.value === key)?.label ?? key;
+export function presetLabel(preset: string): string {
+  return METRIC_PRESET_OPTIONS.find((o) => o.value === preset)?.label ?? preset;
+}
+
+export function pullDisplayLabel(pull: ExperimentMetricPull): string {
+  return pull.goalMetricLabel?.trim() || presetLabel(pull.preset) || "Metric";
+}
+
+function refsFromPreset(preset: string): {
+  label: string;
+  metrics: ExperimentMetricRef[];
+  combine: ExperimentMetricCombine;
+} {
+  if (preset === "custom") {
+    return {
+      label: "Custom metric",
+      metrics: [{ label: "" }],
+      combine: "custom",
+    };
+  }
+  const label = presetLabel(preset);
+  return {
+    label,
+    metrics: [{ label }],
+    combine: "single",
+  };
 }
 
 export function defaultMetricPull(
-  itemType: Experiment["itemType"],
+  itemType: ExperimentItemType,
 ): ExperimentMetricPull {
   const scope: ExperimentMetricScope =
     itemType === "Campaign"
       ? "campaign"
       : itemType === "Flow message"
         ? "flow_message"
-        : "aggregate";
+        : itemType === "Form"
+          ? "form"
+          : itemType === "Segment"
+            ? "segment"
+            : itemType === "List"
+              ? "list"
+              : itemType === "Account"
+                ? "account"
+                : itemType === "SMS"
+                  ? "flow_message"
+                  : "custom";
+  const fromPreset = refsFromPreset("click_rate");
   return {
     scope,
-    metricKey: "click_rate",
+    preset: "click_rate",
+    goalMetricLabel: fromPreset.label,
+    metrics: fromPreset.metrics,
+    combine: fromPreset.combine,
+    combineNote: "",
     objectId: "",
     objectLabel: "",
     benchmarkDays: 30,
@@ -81,21 +166,95 @@ export function defaultMetricPull(
   };
 }
 
-/** Normalize older plan JSON that predates metricPull. */
+type LegacyPull = Partial<ExperimentMetricPull> & {
+  metricKey?: string;
+};
+
+/** Normalize older plan JSON (metricKey-only or missing metricPull). */
 export function ensureExperimentMetricPull(
-  experiment: Omit<Experiment, "metricPull"> & {
-    metricPull?: ExperimentMetricPull;
+  experiment: Omit<Experiment, "metricPull" | "itemType"> & {
+    itemType: string;
+    metricPull?: LegacyPull;
   },
 ): Experiment {
-  if (experiment.metricPull) {
-    return experiment as Experiment;
+  const itemType = (EXPERIMENT_ITEM_TYPE_OPTIONS.includes(
+    experiment.itemType as ExperimentItemType,
+  )
+    ? experiment.itemType
+    : "Other") as ExperimentItemType;
+
+  const legacy = experiment.metricPull;
+  if (legacy && legacy.goalMetricLabel && Array.isArray(legacy.metrics)) {
+    return {
+      ...experiment,
+      itemType,
+      metricPull: {
+        scope: legacy.scope ?? "custom",
+        preset: legacy.preset ?? legacy.metricKey ?? "custom",
+        goalMetricLabel: legacy.goalMetricLabel,
+        metrics:
+          legacy.metrics.length > 0
+            ? legacy.metrics
+            : [{ label: legacy.goalMetricLabel }],
+        combine: legacy.combine ?? "single",
+        combineNote: legacy.combineNote ?? "",
+        objectId: legacy.objectId ?? "",
+        objectLabel: legacy.objectLabel ?? "",
+        benchmarkDays: legacy.benchmarkDays ?? 30,
+        autoPull: legacy.autoPull ?? true,
+      },
+    };
   }
+
+  if (legacy?.metricKey) {
+    const fromPreset = refsFromPreset(legacy.metricKey);
+    return {
+      ...experiment,
+      itemType,
+      metricPull: {
+        scope: legacy.scope ?? defaultMetricPull(itemType).scope,
+        preset: legacy.metricKey,
+        goalMetricLabel: fromPreset.label,
+        metrics: fromPreset.metrics,
+        combine: fromPreset.combine,
+        combineNote: "",
+        objectId: legacy.objectId ?? "",
+        objectLabel: legacy.objectLabel ?? "",
+        benchmarkDays: legacy.benchmarkDays ?? 30,
+        autoPull: legacy.autoPull ?? true,
+      },
+      metricLabel: experiment.metricLabel || fromPreset.label,
+    };
+  }
+
+  const pull = defaultMetricPull(itemType);
   return {
     ...experiment,
-    metricPull: {
-      ...defaultMetricPull(experiment.itemType),
-      autoPull: false,
-    },
+    itemType,
+    metricPull: { ...pull, autoPull: false },
+  };
+}
+
+export function applyPresetToPull(
+  pull: ExperimentMetricPull,
+  preset: string,
+): ExperimentMetricPull {
+  if (preset === "custom") {
+    return {
+      ...pull,
+      preset: "custom",
+      combine: pull.combine === "single" ? "custom" : pull.combine,
+      goalMetricLabel: pull.goalMetricLabel || "",
+      metrics: pull.metrics.length > 0 ? pull.metrics : [{ label: "" }],
+    };
+  }
+  const fromPreset = refsFromPreset(preset);
+  return {
+    ...pull,
+    preset,
+    goalMetricLabel: fromPreset.label,
+    metrics: fromPreset.metrics,
+    combine: fromPreset.combine,
   };
 }
 

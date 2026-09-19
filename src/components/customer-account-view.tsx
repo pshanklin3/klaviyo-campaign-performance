@@ -21,19 +21,23 @@ import {
 import type {
   CustomerPlan,
   Experiment,
-  ExperimentMetricKey,
+  ExperimentItemType,
+  ExperimentMetricCombine,
   ExperimentMetricScope,
   Goal,
   OverviewMetric,
   Task,
 } from "@/lib/plan/types";
 import {
-  METRIC_KEY_OPTIONS,
+  EXPERIMENT_ITEM_TYPE_OPTIONS,
+  METRIC_COMBINE_OPTIONS,
+  METRIC_PRESET_OPTIONS,
   METRIC_SCOPE_OPTIONS,
+  applyPresetToPull,
   defaultMetricPull,
   describeMetricWindows,
   ensureExperimentMetricPull,
-  metricKeyLabel,
+  pullDisplayLabel,
 } from "@/lib/plan/experiment-metrics";
 import {
   ArrowDownRight,
@@ -185,16 +189,16 @@ export function CustomerAccountView({
       ...p,
       experiments: p.experiments.map((e) => {
         if (e.id !== id) return e;
-        const metricPull = { ...ensureExperimentMetricPull(e).metricPull, ...patch };
-        const metricLabel = metricKeyLabel(metricPull.metricKey);
+        const base = ensureExperimentMetricPull(e);
+        const metricPull = { ...base.metricPull, ...patch };
         const windows = describeMetricWindows({
-          ...e,
+          ...base,
           metricPull,
         });
         return {
-          ...e,
+          ...base,
           metricPull,
-          metricLabel,
+          metricLabel: pullDisplayLabel(metricPull),
           benchmarkNote: windows.benchmark,
           currentNote: windows.current,
         };
@@ -214,7 +218,7 @@ export function CustomerAccountView({
       implemented: "",
       changedOn,
       metricPull,
-      metricLabel: metricKeyLabel(metricPull.metricKey),
+      metricLabel: pullDisplayLabel(metricPull),
       benchmarkValue: "—",
       benchmarkNote: `${metricPull.benchmarkDays}d before ${changedOn}`,
       currentValue: "—",
@@ -698,22 +702,19 @@ export function CustomerAccountView({
                                 value={item.itemType}
                                 onChange={(e) => {
                                   const itemType = e.target
-                                    .value as Experiment["itemType"];
+                                    .value as ExperimentItemType;
+                                  const nextPull = defaultMetricPull(itemType);
                                   updateExperiment(item.id, { itemType });
                                   updateMetricPull(item.id, {
-                                    scope:
-                                      itemType === "Campaign"
-                                        ? "campaign"
-                                        : itemType === "Flow message"
-                                          ? "flow_message"
-                                          : pull.scope,
+                                    scope: nextPull.scope,
                                   });
                                 }}
                               >
-                                <option>Flow message</option>
-                                <option>Campaign</option>
-                                <option>Form</option>
-                                <option>Other</option>
+                                {EXPERIMENT_ITEM_TYPE_OPTIONS.map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))}
                               </select>
                               <label className="flex items-center gap-1 text-xs text-[color:var(--ink-muted)]">
                                 Changed
@@ -802,12 +803,12 @@ export function CustomerAccountView({
                             />
                             <div className="space-y-2 rounded-xl border border-dashed border-[color:var(--panel-border)] bg-[color:var(--panel)]/60 p-3">
                               <p className="text-xs font-medium uppercase tracking-[0.12em] text-[color:var(--ink-muted)]">
-                                Metric to pull
+                                Goal metric (any metric or aggregate)
                               </p>
                               <div className="grid gap-2 sm:grid-cols-2">
                                 <label className="space-y-1 text-xs">
                                   <span className="text-[color:var(--ink-muted)]">
-                                    Source
+                                    Source object
                                   </span>
                                   <select
                                     className={inputClass}
@@ -828,19 +829,67 @@ export function CustomerAccountView({
                                 </label>
                                 <label className="space-y-1 text-xs">
                                   <span className="text-[color:var(--ink-muted)]">
-                                    Metric
+                                    Preset shortcut
                                   </span>
                                   <select
                                     className={inputClass}
-                                    value={pull.metricKey}
+                                    value={
+                                      METRIC_PRESET_OPTIONS.some(
+                                        (o) => o.value === pull.preset,
+                                      )
+                                        ? pull.preset
+                                        : "custom"
+                                    }
+                                    onChange={(e) => {
+                                      const next = applyPresetToPull(
+                                        pull,
+                                        e.target.value,
+                                      );
+                                      updateMetricPull(item.id, next);
+                                    }}
+                                  >
+                                    {METRIC_PRESET_OPTIONS.map((o) => (
+                                      <option key={o.value} value={o.value}>
+                                        {o.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-1 text-xs sm:col-span-2">
+                                  <span className="text-[color:var(--ink-muted)]">
+                                    Goal metric label
+                                  </span>
+                                  <input
+                                    className={inputClass}
+                                    value={pull.goalMetricLabel}
                                     onChange={(e) =>
                                       updateMetricPull(item.id, {
-                                        metricKey: e.target
-                                          .value as ExperimentMetricKey,
+                                        preset: "custom",
+                                        goalMetricLabel: e.target.value,
+                                      })
+                                    }
+                                    placeholder="e.g. Email + SMS attributed revenue"
+                                  />
+                                </label>
+                                <label className="space-y-1 text-xs">
+                                  <span className="text-[color:var(--ink-muted)]">
+                                    How metrics combine
+                                  </span>
+                                  <select
+                                    className={inputClass}
+                                    value={pull.combine}
+                                    onChange={(e) =>
+                                      updateMetricPull(item.id, {
+                                        combine: e.target
+                                          .value as ExperimentMetricCombine,
+                                        preset:
+                                          e.target.value === "single"
+                                            ? pull.preset
+                                            : "custom",
                                       })
                                     }
                                   >
-                                    {METRIC_KEY_OPTIONS.map((o) => (
+                                    {METRIC_COMBINE_OPTIONS.map((o) => (
                                       <option key={o.value} value={o.value}>
                                         {o.label}
                                       </option>
@@ -859,7 +908,7 @@ export function CustomerAccountView({
                                         objectId: e.target.value,
                                       })
                                     }
-                                    placeholder="Message / flow / campaign id"
+                                    placeholder="Message / flow / campaign / form id"
                                   />
                                 </label>
                                 <label className="space-y-1 text-xs">
@@ -879,6 +928,122 @@ export function CustomerAccountView({
                                     }
                                   />
                                 </label>
+                                {pull.combine === "custom" ||
+                                pull.combine === "ratio" ||
+                                pull.combine === "sum" ||
+                                pull.combine === "average" ? (
+                                  <label className="space-y-1 text-xs sm:col-span-2">
+                                    <span className="text-[color:var(--ink-muted)]">
+                                      Formula / notes
+                                    </span>
+                                    <input
+                                      className={inputClass}
+                                      value={pull.combineNote ?? ""}
+                                      onChange={(e) =>
+                                        updateMetricPull(item.id, {
+                                          combineNote: e.target.value,
+                                        })
+                                      }
+                                      placeholder="e.g. Placed Order (email) + Placed Order (SMS)"
+                                    />
+                                  </label>
+                                ) : null}
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-medium text-[color:var(--ink-muted)]">
+                                    Metric(s) in this goal
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="rounded-full"
+                                    onClick={() =>
+                                      updateMetricPull(item.id, {
+                                        preset: "custom",
+                                        metrics: [
+                                          ...pull.metrics,
+                                          { label: "", metricId: "" },
+                                        ],
+                                        combine:
+                                          pull.metrics.length >= 1 &&
+                                          pull.combine === "single"
+                                            ? "sum"
+                                            : pull.combine,
+                                      })
+                                    }
+                                  >
+                                    <Plus className="size-3.5" />
+                                    Add metric
+                                  </Button>
+                                </div>
+                                {pull.metrics.map((ref, idx) => (
+                                  <div
+                                    key={`${item.id}-m-${idx}`}
+                                    className="flex flex-col gap-2 sm:flex-row"
+                                  >
+                                    <input
+                                      className={inputClass}
+                                      value={ref.label}
+                                      onChange={(e) => {
+                                        const metrics = pull.metrics.map(
+                                          (m, i) =>
+                                            i === idx
+                                              ? { ...m, label: e.target.value }
+                                              : m,
+                                        );
+                                        updateMetricPull(item.id, {
+                                          preset: "custom",
+                                          metrics,
+                                          goalMetricLabel:
+                                            pull.combine === "single" &&
+                                            metrics[0]
+                                              ? metrics[0].label
+                                              : pull.goalMetricLabel,
+                                        });
+                                      }}
+                                      placeholder="Metric name"
+                                    />
+                                    <input
+                                      className={inputClass}
+                                      value={ref.metricId ?? ""}
+                                      onChange={(e) => {
+                                        const metrics = pull.metrics.map(
+                                          (m, i) =>
+                                            i === idx
+                                              ? {
+                                                  ...m,
+                                                  metricId: e.target.value,
+                                                }
+                                              : m,
+                                        );
+                                        updateMetricPull(item.id, {
+                                          preset: "custom",
+                                          metrics,
+                                        });
+                                      }}
+                                      placeholder="Klaviyo metric id (optional)"
+                                    />
+                                    {pull.metrics.length > 1 ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-rose-700"
+                                        onClick={() =>
+                                          updateMetricPull(item.id, {
+                                            metrics: pull.metrics.filter(
+                                              (_, i) => i !== idx,
+                                            ),
+                                          })
+                                        }
+                                      >
+                                        <Trash2 className="size-3.5" />
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                ))}
                               </div>
                               <p className="text-xs text-[color:var(--ink-soft)]">
                                 {
@@ -887,9 +1052,9 @@ export function CustomerAccountView({
                                   )?.hint
                                 }{" "}
                                 · Windows: {windows.benchmark} →{" "}
-                                {windows.current}. Auto-pull from Klaviyo SSO
-                                lands next; values below stay display-only until
-                                then.
+                                {windows.current}. Presets are shortcuts —
+                                any Klaviyo metric or aggregate can be the
+                                goal.
                               </p>
                               <label className="flex items-center gap-2 text-xs text-[color:var(--ink-soft)]">
                                 <input

@@ -137,7 +137,15 @@
       "deltaPct": 33.3,
       "metricPull": {
         "scope": "flow_message",
-        "metricKey": "click_rate",
+        "preset": "click_rate",
+        "goalMetricLabel": "Click rate",
+        "metrics": [
+          {
+            "label": "Click rate"
+          }
+        ],
+        "combine": "single",
+        "combineNote": "",
         "objectId": "",
         "objectLabel": "Browse Abandon \u00b7 Email 2",
         "benchmarkDays": 30,
@@ -152,7 +160,7 @@
       "goal": "Increase attributed revenue / recipient",
       "implemented": "Shortened copy + single offer link",
       "changedOn": "2026-09-11",
-      "metricLabel": "Rev / recipient",
+      "metricLabel": "Revenue / recipient",
       "benchmarkValue": "$0.41",
       "benchmarkNote": "L30 before change",
       "currentValue": "$0.38",
@@ -160,7 +168,15 @@
       "deltaPct": -7.3,
       "metricPull": {
         "scope": "flow_message",
-        "metricKey": "revenue_per_recipient",
+        "preset": "revenue_per_recipient",
+        "goalMetricLabel": "Revenue / recipient",
+        "metrics": [
+          {
+            "label": "Revenue / recipient"
+          }
+        ],
+        "combine": "single",
+        "combineNote": "",
         "objectId": "",
         "objectLabel": "Welcome Series \u00b7 SMS 1",
         "benchmarkDays": 30,
@@ -183,7 +199,15 @@
       "deltaPct": 8.9,
       "metricPull": {
         "scope": "campaign",
-        "metricKey": "click_rate",
+        "preset": "click_rate",
+        "goalMetricLabel": "Click rate",
+        "metrics": [
+          {
+            "label": "Click rate"
+          }
+        ],
+        "combine": "single",
+        "combineNote": "",
         "objectId": "",
         "objectLabel": "VIP early access \u00b7 Fall drop",
         "benchmarkDays": 30,
