@@ -2,7 +2,7 @@ import { get, list, put } from "@vercel/blob";
 import { promises as fs } from "fs";
 import path from "path";
 import { ensureExperimentMetricPull } from "./experiment-metrics";
-import type { CustomerPlan } from "./types";
+import type { CustomerPlan, Experiment } from "./types";
 import { emptyPlan } from "./types";
 
 const customersDir = path.join(process.cwd(), "src/data/customers");
@@ -19,6 +19,56 @@ function hasBlobToken() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
 }
 
+function pulledAtMs(experiment: Experiment): number {
+  return experiment.lastPulledAt
+    ? Date.parse(experiment.lastPulledAt) || 0
+    : 0;
+}
+
+/**
+ * Blob holds CSM edits; git/file holds MCP-refreshed metric values.
+ * Prefer newer lastPulledAt for benchmark/current fields so Cursor SSO
+ * refreshes show up on Vercel without a private API key.
+ */
+export function mergeCustomerPlans(
+  edited: CustomerPlan,
+  fromRepo: CustomerPlan,
+): CustomerPlan {
+  const repoById = new Map(
+    fromRepo.experiments.map((e) => [e.id, ensureExperimentMetricPull(e)]),
+  );
+  const mergedExperiments = edited.experiments.map((raw) => {
+    const editedExp = ensureExperimentMetricPull(raw);
+    const repoExp = repoById.get(editedExp.id);
+    if (!repoExp) return editedExp;
+    if (pulledAtMs(repoExp) > pulledAtMs(editedExp)) {
+      return {
+        ...editedExp,
+        metricPull: repoExp.metricPull,
+        metricLabel: repoExp.metricLabel,
+        benchmarkValue: repoExp.benchmarkValue,
+        benchmarkNote: repoExp.benchmarkNote,
+        currentValue: repoExp.currentValue,
+        currentNote: repoExp.currentNote,
+        deltaPct: repoExp.deltaPct,
+        lastPulledAt: repoExp.lastPulledAt,
+      };
+    }
+    return editedExp;
+  });
+
+  for (const [id, repoExp] of repoById) {
+    if (!mergedExperiments.some((e) => e.id === id)) {
+      mergedExperiments.push(repoExp);
+    }
+  }
+
+  return {
+    ...edited,
+    experiments: mergedExperiments,
+  };
+}
+
 async function readPlanFromBlob(
   customerId: string,
 ): Promise<CustomerPlan | null> {
@@ -26,7 +76,6 @@ async function readPlanFromBlob(
 
   try {
     const pathname = blobPathname(customerId);
-    // Prefer direct get by pathname; fall back to list for older uploads.
     try {
       const result = await get(pathname, {
         access: "private",
@@ -97,8 +146,14 @@ export async function getCustomerPlan(
   customerId: string,
 ): Promise<CustomerPlan | null> {
   const fromBlob = await readPlanFromBlob(customerId);
-  const plan = fromBlob ?? (await readPlanFromFile(customerId));
-  if (!plan) return null;
+  const fromFile = await readPlanFromFile(customerId);
+  if (!fromBlob && !fromFile) return null;
+
+  const plan =
+    fromBlob && fromFile
+      ? mergeCustomerPlans(fromBlob, fromFile)
+      : (fromBlob ?? fromFile)!;
+
   return {
     ...plan,
     experiments: plan.experiments.map(ensureExperimentMetricPull),
@@ -112,8 +167,12 @@ export async function saveCustomerPlan(
   | { ok: true; persisted: boolean; storage: "blob" | "file" }
   | { ok: false; error: string; hint?: string }
 > {
+  // Keep any newer MCP-refreshed metric values from the repo file.
+  const fromFile = await readPlanFromFile(customerId);
+  const merged = fromFile ? mergeCustomerPlans(plan, fromFile) : plan;
+
   const normalized: CustomerPlan = {
-    ...plan,
+    ...merged,
     customerId,
     syncedAt: new Date().toISOString(),
   };
@@ -121,7 +180,6 @@ export async function saveCustomerPlan(
   if (hasBlobToken()) {
     try {
       await writePlanToBlob(customerId, normalized);
-      // Best-effort local mirror for git/dev convenience.
       try {
         await writePlanToFile(customerId, normalized);
       } catch {

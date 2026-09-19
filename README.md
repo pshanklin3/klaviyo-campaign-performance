@@ -36,27 +36,22 @@ Local `npm run dev` writes `src/data/customers/*/plan.json`. On Vercel, Save use
 3. **Redeploy** so the token is live
 4. Edit + Save on the account page — status should say Saved to Vercel Blob
 
-## Experiment metric pulls
+## Experiment metric pulls (MCP / SSO)
 
-Each experiment stores **what changed** plus a flexible **goal metric**.
+Benchmark / current values are refreshed by the **Cursor agent using Klaviyo MCP** — not a private API key on Vercel.
+
+1. In Cursor: **“Refresh experiment metrics for hunter-trading”**
+2. Agent pulls via Klaviyo SSO (Reporting API through MCP), updates `plan.json`, pushes
+3. After Vercel deploys, the live app **merges** those metric fields over Blob so CSM edits are kept
+
+Each experiment needs `objectId` (flow message / campaign id) and `changedOn` for before/after windows.
 
 | Field | Purpose |
 | --- | --- |
-| `scope` | flow message · flow · campaign · form · segment · list · account · custom |
-| `preset` | Optional shortcut (click rate, …) or `custom` |
-| `goalMetricLabel` | What shows on the card |
-| `metrics[]` | Underlying event metric(s) when needed |
+| `scope` | flow message · flow · campaign · … |
 | `objectId` | Klaviyo flow message / flow / campaign id |
 | `changedOn` + `benchmarkDays` | Before/after windows |
-
-**Refresh metrics** (Edit mode) calls Klaviyo Reporting API and writes Benchmark / Current.
-
-For production Refresh, set on Vercel:
-
-- `KLAVIYO_PRIVATE_API_KEY`
-- optional `KLAVIYO_CONVERSION_METRIC_ID` (defaults to Placed Order lookup)
-
-Without an API key, ask the Cursor agent (Klaviyo SSO) to refresh metrics. Rates like click rate use Reporting API stats (no separate “click rate” metric id).
+| `preset` / `goalMetricLabel` | What number to show (click rate, rev/recipient, …) |
 
 ## Run locally
 

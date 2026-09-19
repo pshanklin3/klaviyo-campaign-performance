@@ -329,6 +329,8 @@ export function CustomerAccountView({
       const body = (await response.json().catch(() => null)) as {
         error?: string;
         hint?: string;
+        message?: string;
+        mode?: "mcp" | "api_key";
         plan?: CustomerPlan;
         results?: { id: string; name: string; ok: boolean; detail: string }[];
       } | null;
@@ -337,6 +339,14 @@ export function CustomerAccountView({
           [body?.error, body?.hint].filter(Boolean).join(" — ") ||
             "Refresh failed",
         );
+      }
+      if (body?.mode === "mcp") {
+        setStatus(
+          body.hint ||
+            body.message ||
+            "Ask Cursor: “Refresh experiment metrics” (Klaviyo MCP / SSO).",
+        );
+        return;
       }
       if (body?.plan) {
         setPlan({
@@ -500,7 +510,7 @@ export function CustomerAccountView({
                 disabled={refreshing || saving}
                 onClick={() => void refreshMetrics()}
               >
-                {refreshing ? "Refreshing…" : "Refresh metrics"}
+                {refreshing ? "Refreshing…" : "How to refresh"}
               </Button>
               <Button
                 type="button"
@@ -779,11 +789,11 @@ export function CustomerAccountView({
                 </CardTitle>
                 <CardDescription>
                   Names, goals, and changes are CSM-edited. Benchmark / current
-                  come from Klaviyo Reporting (before vs after the change date)
-                  when object IDs are set — use Refresh metrics in Edit mode.
+                  are refreshed by the Cursor agent via Klaviyo MCP (SSO) — say
+                  “Refresh experiment metrics”. No private API key required.
                   {editing
                     ? " Add / Delete experiments, then Save."
-                    : " Click Edit to add, remove, or refresh."}
+                    : " Click Edit to add or remove experiments."}
                 </CardDescription>
               </div>
               {editing ? (

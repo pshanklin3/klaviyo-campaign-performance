@@ -1,17 +1,21 @@
+import { hasKlaviyoApiKey } from "@/lib/klaviyo/reporting";
+import { pullAllExperimentMetrics } from "@/lib/plan/pull-experiment-metrics";
 import {
   getAdminPassword,
   getCustomerPlan,
   isAdminAuthorized,
   saveCustomerPlan,
 } from "@/lib/plan/store";
-import { pullAllExperimentMetrics } from "@/lib/plan/pull-experiment-metrics";
-import { hasKlaviyoApiKey } from "@/lib/klaviyo/reporting";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ customerId: string }> };
 
+/**
+ * Metric refresh is MCP-first (Cursor + Klaviyo SSO).
+ * Private API key is only an optional server-side fallback — not required.
+ */
 export async function POST(request: Request, { params }: Params) {
   const { customerId } = await params;
   const password = request.headers.get("x-csm-admin-password");
@@ -24,38 +28,39 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   }
 
-  if (!hasKlaviyoApiKey()) {
-    return NextResponse.json(
-      {
-        error: "Klaviyo API key not configured on this deployment",
-        hint: "Add KLAVIYO_PRIVATE_API_KEY (and optional KLAVIYO_CONVERSION_METRIC_ID) in Vercel → Environment Variables, then redeploy. Or ask the Cursor agent with Klaviyo SSO to refresh experiment metrics for you.",
-        hasApiKey: false,
-      },
-      { status: 501 },
+  // Optional fallback only — primary path is Cursor agent + Klaviyo MCP.
+  if (hasKlaviyoApiKey()) {
+    const { experiments, results } = await pullAllExperimentMetrics(
+      plan.experiments,
     );
-  }
-
-  const { experiments, results } = await pullAllExperimentMetrics(
-    plan.experiments,
-  );
-  const nextPlan = {
-    ...plan,
-    experiments,
-    syncedAt: new Date().toISOString(),
-  };
-  const saved = await saveCustomerPlan(customerId, nextPlan);
-  if (!saved.ok) {
-    return NextResponse.json(
-      { error: saved.error, hint: saved.hint, results },
-      { status: 500 },
-    );
+    const nextPlan = {
+      ...plan,
+      experiments,
+      syncedAt: new Date().toISOString(),
+    };
+    const saved = await saveCustomerPlan(customerId, nextPlan);
+    if (!saved.ok) {
+      return NextResponse.json(
+        { error: saved.error, hint: saved.hint, results },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({
+      ok: true,
+      mode: "api_key",
+      storage: saved.storage,
+      plan: nextPlan,
+      results,
+    });
   }
 
   return NextResponse.json({
     ok: true,
-    storage: saved.storage,
-    plan: nextPlan,
-    results,
+    mode: "mcp",
+    plan,
+    message:
+      "Experiment metrics refresh through Cursor + Klaviyo MCP (SSO), not a private API key.",
+    hint: `In Cursor chat say: “Refresh experiment metrics for ${customerId}”. The agent pulls via Klaviyo MCP, commits plan.json, and after deploy the live site merges those metrics over Blob.`,
     passwordHint:
       process.env.NODE_ENV === "production"
         ? undefined
