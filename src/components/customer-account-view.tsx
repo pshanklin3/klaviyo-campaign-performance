@@ -443,7 +443,8 @@ export function CustomerAccountView({
     pendingRefreshRef.current = false;
     setRefreshing(true);
     setError(null);
-    setStatus("Pass 1/2 — refreshing ecom from Klaviyo…");
+    setStatus("Pass 1/3 — refreshing ecom…");
+    const notes: string[] = [];
     try {
       try {
         sessionStorage.setItem("csm-admin-password", authPassword);
@@ -451,55 +452,91 @@ export function CustomerAccountView({
         // ignore
       }
 
+      const applyPlan = (body: {
+        plan?: CustomerPlan;
+        storage?: "blob" | "file";
+      }) => {
+        if (body.plan) {
+          setPlan({
+            ...body.plan,
+            experiments: body.plan.experiments.map(ensureExperimentMetricPull),
+          });
+        }
+        if (body.storage) setActiveStorage(body.storage);
+      };
+
       const ecomBody = await postRefresh(
         `/api/customers/${plan.customerId}/metrics/refresh`,
         authPassword,
       );
-      if (ecomBody.plan) {
-        setPlan({
-          ...ecomBody.plan,
-          experiments: ecomBody.plan.experiments.map(ensureExperimentMetricPull),
-        });
-      }
-      if (ecomBody.storage) setActiveStorage(ecomBody.storage);
-      setStatus("Pass 2/2 — refreshing attributed + experiments…");
+      applyPlan(ecomBody);
+      notes.push("ecom");
+      setStatus("Pass 2/3 — refreshing attributed…");
 
       try {
         const attrBody = await postRefresh(
           `/api/customers/${plan.customerId}/metrics/refresh-attributed`,
           authPassword,
         );
-        if (attrBody.plan) {
-          setPlan({
-            ...attrBody.plan,
-            experiments: attrBody.plan.experiments.map(
-              ensureExperimentMetricPull,
-            ),
-          });
-        }
-        if (attrBody.storage) setActiveStorage(attrBody.storage);
-        const failed =
-          attrBody.results?.filter((r) => !r.ok).map((r) => r.name) ?? [];
-        const okCount = attrBody.results?.filter((r) => r.ok).length ?? 0;
-        const skipped =
-          attrBody.results?.filter((r) =>
-            /Skipped this pass/i.test(r.detail),
-          ).length ?? 0;
-        setStatus(
-          failed.length
-            ? `Ecom + attributed updated; experiments: ${okCount} ok, failed: ${failed.join(", ")}`
-            : skipped
-              ? `Ecom + attributed updated; ${okCount} experiment(s) ok, ${skipped} deferred — Refresh again to finish.`
-              : `Ecom, attributed, and ${okCount} experiment(s) updated from Klaviyo.`,
-        );
+        applyPlan(attrBody);
+        notes.push("attributed");
       } catch (attrErr) {
-        // Ecom already saved — surface pass-2 failure without discarding pass 1
         setError(
           attrErr instanceof Error
-            ? `Ecom saved. Pass 2 failed: ${attrErr.message}`
-            : "Ecom saved. Pass 2 (attributed) failed — click Refresh again.",
+            ? `Pass 2 (attributed) failed: ${attrErr.message}`
+            : "Pass 2 (attributed) failed — click Refresh again.",
         );
-        setStatus("Ecom updated. Attributed/experiments not refreshed this time.");
+        setStatus(`Updated: ${notes.join(", ")}. Attributed not refreshed.`);
+        return;
+      }
+
+      // Brief cooldown so campaign/flow report rate limits can recover
+      setStatus("Pass 3/3 — waiting briefly, then experiments…");
+      await new Promise((r) => setTimeout(r, 4000));
+      setStatus("Pass 3/3 — refreshing experiments…");
+
+      try {
+        const expBody = await postRefresh(
+          `/api/customers/${plan.customerId}/metrics/refresh-experiments`,
+          authPassword,
+        );
+        applyPlan(expBody);
+        const failed =
+          expBody.results?.filter((r) => !r.ok) ?? [];
+        const okCount = expBody.results?.filter((r) => r.ok).length ?? 0;
+        const deferred =
+          expBody.results?.filter((r) => /Deferred/i.test(r.detail)).length ??
+          0;
+        if (failed.length) {
+          const firstDetail = failed[0]?.detail?.slice(0, 160) ?? "";
+          setStatus(
+            `Ecom + attributed updated; experiments: ${okCount} ok, ${failed.length} failed` +
+              (firstDetail ? ` (${failed[0].name}: ${firstDetail})` : ""),
+          );
+          setError(
+            failed
+              .map((r) => `${r.name}: ${r.detail}`)
+              .join(" · ")
+              .slice(0, 500),
+          );
+        } else if (deferred) {
+          setStatus(
+            `Ecom + attributed + ${okCount} experiment(s) updated; ${deferred} deferred — Refresh again to finish.`,
+          );
+        } else {
+          setStatus(
+            `Ecom, attributed, and ${okCount} experiment(s) updated from Klaviyo.`,
+          );
+        }
+      } catch (expErr) {
+        setError(
+          expErr instanceof Error
+            ? `Pass 3 (experiments) failed: ${expErr.message}`
+            : "Pass 3 (experiments) failed — click Refresh again.",
+        );
+        setStatus(
+          `Updated: ${notes.join(", ")}. Experiments not refreshed this time.`,
+        );
       }
 
       try {

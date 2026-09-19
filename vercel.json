@@ -5,6 +5,9 @@
     },
     "src/app/api/customers/[customerId]/metrics/refresh-attributed/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/customers/[customerId]/metrics/refresh-experiments/route.ts": {
+      "maxDuration": 60
     }
   }
 }
