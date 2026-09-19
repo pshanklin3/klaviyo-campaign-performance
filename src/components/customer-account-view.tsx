@@ -51,7 +51,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type Tab = "performance" | "success";
 
@@ -168,6 +168,7 @@ export function CustomerAccountView({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeStorage, setActiveStorage] = useState(storageMode);
+  const experimentsEndRef = useRef<HTMLDivElement | null>(null);
 
   const { overview } = plan;
 
@@ -226,7 +227,16 @@ export function CustomerAccountView({
       currentNote: `Since ${changedOn}`,
       deltaPct: 0,
     };
-    setPlan((p) => ({ ...p, experiments: [experiment, ...p.experiments] }));
+    // Append so "Add another" at the bottom visibly adds below the list.
+    setPlan((p) => ({ ...p, experiments: [...p.experiments, experiment] }));
+    setStatus("Added experiment — edit the new card, then Save.");
+    setError(null);
+    requestAnimationFrame(() => {
+      experimentsEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
   }
 
   function updateGoal(id: string, patch: Partial<Goal>) {
@@ -673,7 +683,11 @@ export function CustomerAccountView({
                   size="sm"
                   variant="outline"
                   className="rounded-full"
-                  onClick={addExperiment}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addExperiment();
+                  }}
                 >
                   <Plus className="size-3.5" />
                   Add experiment
@@ -691,7 +705,11 @@ export function CustomerAccountView({
                       type="button"
                       size="sm"
                       className="rounded-full"
-                      onClick={addExperiment}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        addExperiment();
+                      }}
                     >
                       <Plus className="size-3.5" />
                       Add experiment
@@ -1195,15 +1213,21 @@ export function CustomerAccountView({
                 })
               )}
               {editing && plan.experiments.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full rounded-full"
-                  onClick={addExperiment}
-                >
-                  <Plus className="size-3.5" />
-                  Add another experiment
-                </Button>
+                <div ref={experimentsEndRef}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full rounded-full"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      addExperiment();
+                    }}
+                  >
+                    <Plus className="size-3.5" />
+                    Add another experiment
+                  </Button>
+                </div>
               ) : null}
             </CardContent>
           </Card>
