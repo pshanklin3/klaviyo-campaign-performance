@@ -267,16 +267,32 @@ export function CustomerAccountView({
     const params = new URLSearchParams(window.location.search);
     const oauth = params.get("oauth");
     if (!oauth) return;
+    const savedPassword = sessionStorage.getItem("csm-admin-password");
+    if (savedPassword) {
+      setPassword(savedPassword);
+    }
     if (oauth === "connected") {
       setKlaviyoConnected(true);
-      setStatus("Klaviyo connected. Click Refresh metrics to pull live numbers.");
       setError(null);
+      if (savedPassword) {
+        setEditing(true);
+        setShowUnlock(false);
+        setStatus("Klaviyo connected — refreshing metrics…");
+        // Pass password explicitly — React state is still stale in this effect.
+        void refreshMetrics(savedPassword);
+      } else {
+        setShowUnlock(true);
+        setStatus(
+          "Klaviyo connected. Enter the CSM password, Unlock, then Refresh metrics.",
+        );
+      }
     } else if (oauth.startsWith("error:")) {
       setError(oauth.slice("error:".length));
     }
     params.delete("oauth");
     const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
     window.history.replaceState({}, "", next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on return from OAuth
   }, []);
 
   function updateExperiment(id: string, patch: Partial<Experiment>) {
@@ -404,6 +420,11 @@ export function CustomerAccountView({
             "Could not start Klaviyo connect",
         );
       }
+      try {
+        sessionStorage.setItem("csm-admin-password", password);
+      } catch {
+        // ignore
+      }
       window.location.href = body.authorizeUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connect failed");
@@ -411,8 +432,9 @@ export function CustomerAccountView({
     }
   }
 
-  async function refreshMetrics() {
-    if (!password.trim()) {
+  async function refreshMetrics(passwordOverride?: string) {
+    const authPassword = (passwordOverride ?? password).trim();
+    if (!authPassword) {
       pendingRefreshRef.current = true;
       setShowUnlock(true);
       setError("Enter the CSM password to refresh metrics.");
@@ -421,14 +443,14 @@ export function CustomerAccountView({
     pendingRefreshRef.current = false;
     setRefreshing(true);
     setError(null);
-    setStatus(null);
+    setStatus("Refreshing metrics from Klaviyo…");
     try {
       const response = await fetch(
         `/api/customers/${plan.customerId}/metrics/refresh`,
         {
           method: "POST",
           headers: {
-            "x-csm-admin-password": password,
+            "x-csm-admin-password": authPassword,
           },
         },
       );
@@ -442,18 +464,15 @@ export function CustomerAccountView({
         results?: { id: string; name: string; ok: boolean; detail: string }[];
       } | null;
       if (!response.ok) {
-        const needsConnect =
-          body?.mode === "oauth_required" ||
-          body?.mode === "mcp_required" ||
-          /Connect Klaviyo|OAuth|MCP|Cursor/i.test(
-            [body?.error, body?.hint].filter(Boolean).join(" "),
-          );
-        if (needsConnect) {
+        // Only soft-prompt reconnect when the API says OAuth is missing —
+        // do not match "Connect" inside generic hints (that hid real errors).
+        if (body?.mode === "oauth_required" || body?.mode === "mcp_required") {
+          setKlaviyoConnected(false);
           setStatus(
             body?.hint ||
               "Connect Klaviyo first (OAuth), then click Refresh metrics.",
           );
-          setError(null);
+          setError(body?.error ?? null);
           return;
         }
         throw new Error(
@@ -476,6 +495,11 @@ export function CustomerAccountView({
           ? `Refreshed overview; experiments: ${okCount} ok, failed: ${failed.join(", ")}`
           : `Refreshed overview and ${okCount} experiment metric(s) from Klaviyo.`,
       );
+      try {
+        sessionStorage.removeItem("csm-admin-password");
+      } catch {
+        // ignore
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refresh failed");
     } finally {
@@ -645,7 +669,7 @@ export function CustomerAccountView({
     setError(null);
     if (pendingRefreshRef.current) {
       setStatus("Password accepted — refreshing metrics…");
-      void refreshMetrics();
+      void refreshMetrics(password);
       return;
     }
     if (pendingConnectRef.current) {

@@ -1,4 +1,5 @@
 import {
+  findConversionMetricId,
   hasKlaviyoConnection,
   resolveKlaviyoAuth,
   withKlaviyoAuth,
@@ -48,16 +49,17 @@ export async function POST(request: Request, { params }: Params) {
 
   try {
     const auth = await resolveKlaviyoAuth(customerId);
-    const { overviewPull, experimentPull } = await withKlaviyoAuth(
-      auth,
-      async () => {
-        const [overview, experiments] = await Promise.all([
-          pullOverviewMetrics(plan),
-          pullAllExperimentMetrics(plan.experiments),
-        ]);
-        return { overviewPull: overview, experimentPull: experiments };
-      },
-    );
+    // Sequential pulls keep OAuth auth context reliable and surface clearer errors.
+    // Overview first (ecom + L30 attributed); experiments second so a slow
+    // report rate-limit still saves overview progress.
+    const result = await withKlaviyoAuth(auth, async () => {
+      // Lightweight auth probe before the heavy report fan-out
+      await findConversionMetricId();
+      const overviewPull = await pullOverviewMetrics(plan);
+      const experimentPull = await pullAllExperimentMetrics(plan.experiments);
+      return { overviewPull, experimentPull };
+    });
+    const { overviewPull, experimentPull } = result;
 
     const syncedAt = new Date().toISOString();
     const nextPlan = {
@@ -94,12 +96,23 @@ export async function POST(request: Request, { params }: Params) {
           : `Default local password: ${getAdminPassword()}`,
     });
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Refresh failed";
+    const rateLimited = /\b429\b|rate.?limit/i.test(message);
+    const authFailed = /\b401\b|\b403\b|not connected|refresh token/i.test(
+      message,
+    );
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Refresh failed",
-        hint: "Try Connect Klaviyo again, then Refresh metrics.",
+        error: message,
+        hint: authFailed
+          ? "Token may be invalid — click Reconnect Klaviyo, approve again, then Refresh."
+          : rateLimited
+            ? "Klaviyo reporting is rate-limited. Wait ~30s and click Refresh metrics once."
+            : "If this keeps failing, Reconnect Klaviyo and try Refresh again.",
+        mode: authFailed ? "oauth_required" : undefined,
       },
-      { status: 500 },
+      { status: authFailed ? 401 : 500 },
     );
   }
 }

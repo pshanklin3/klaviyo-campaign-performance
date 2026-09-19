@@ -91,7 +91,27 @@ function authHeaders(): Record<string, string> {
   throw new Error("Missing Klaviyo auth");
 }
 
-async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
+/** Reporting endpoints are ~1/s burst / ~2/m steady — serialize + retry 429s. */
+let reportQueue: Promise<unknown> = Promise.resolve();
+let lastReportAt = 0;
+const REPORT_GAP_MS = 1100;
+
+function isReportingPath(path: string) {
+  return (
+    path.includes("-values-reports") ||
+    path.includes("-series-reports") ||
+    path.includes("metric-aggregates")
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function klaviyoFetchOnce<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ ok: true; data: T } | { ok: false; status: number; body: string; retryAfterMs?: number }> {
   const response = await fetch(`${KLAVIYO_BASE}${path}`, {
     ...init,
     headers: {
@@ -106,12 +126,54 @@ async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(
-      `Klaviyo API ${response.status}: ${body.slice(0, 400) || response.statusText}`,
-    );
+    const retryHeader = response.headers.get("Retry-After");
+    const retryAfterMs = retryHeader
+      ? Number(retryHeader) * 1000 || 30_000
+      : undefined;
+    return { ok: false, status: response.status, body, retryAfterMs };
   }
 
-  return response.json() as Promise<T>;
+  return { ok: true, data: (await response.json()) as T };
+}
+
+async function klaviyoFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const run = async (): Promise<T> => {
+    const reporting = isReportingPath(path);
+    if (reporting) {
+      const wait = Math.max(0, REPORT_GAP_MS - (Date.now() - lastReportAt));
+      if (wait > 0) await sleep(wait);
+    }
+
+    let attempt = 0;
+    while (attempt < 5) {
+      attempt += 1;
+      const result = await klaviyoFetchOnce<T>(path, init);
+      if (reporting) lastReportAt = Date.now();
+      if (result.ok) return result.data;
+
+      if (result.status === 429 && attempt < 5) {
+        await sleep(result.retryAfterMs ?? Math.min(60_000, 5_000 * attempt));
+        continue;
+      }
+
+      throw new Error(
+        `Klaviyo API ${result.status}: ${result.body.slice(0, 400) || "request failed"}`,
+      );
+    }
+
+    throw new Error("Klaviyo API: exhausted retries");
+  };
+
+  if (!isReportingPath(path)) {
+    return run();
+  }
+
+  const next = reportQueue.then(run, run);
+  reportQueue = next.then(
+    () => undefined,
+    () => undefined,
+  );
+  return next;
 }
 
 export async function findConversionMetricId(): Promise<string> {

@@ -61,6 +61,7 @@ function metric(
   };
 }
 
+/** Campaign/flow reports are rate-limited (~1/s) — call them one at a time. */
 async function attributedFor(
   conversionMetricId: string,
   timeframe: { key: string } | { start: string; end: string },
@@ -71,10 +72,11 @@ async function attributedFor(
   campaign: number;
   flow: number;
 }> {
-  const [campaigns, flows] = await Promise.all([
-    fetchCampaignValuesReport({ conversionMetricId, timeframe }),
-    fetchFlowValuesReport({ conversionMetricId, timeframe }),
-  ]);
+  const campaigns = await fetchCampaignValuesReport({
+    conversionMetricId,
+    timeframe,
+  });
+  const flows = await fetchFlowValuesReport({ conversionMetricId, timeframe });
   const camp = sumConversion(campaigns);
   const flow = sumConversion(flows);
   const campCh = byChannel(campaigns);
@@ -104,7 +106,12 @@ function rangeSum(
   });
 }
 
-/** Pull Account Overview: total Placed Order (ecom) + attributed campaign/flow. */
+/**
+ * Pull Account Overview.
+ * Ecom (metric-aggregates) can cover all windows.
+ * Attributed (campaign/flow reports) is tightly rate-limited — only refresh
+ * L30 current + prior, and keep other attributed cells from the existing plan.
+ */
 export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
   overview: CustomerPlan["overview"];
   periods: PeriodRow[];
@@ -154,53 +161,38 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     ),
   );
 
-  const [
-    l30,
-    prior30,
-    l7,
-    prior7,
-    yesterday,
-    ydayWeekAgoAttr,
-    mtd,
-    priorMtd,
-    ecomL30,
-    ecomPrior30,
-    ecomL7,
-    ecomPrior7,
-    ecomYday,
-    ecomYdayPrior,
-    ecomMtd,
-    ecomPriorMtd,
-  ] = await Promise.all([
-    attributedFor(conversionMetricId, { key: "last_30_days" }),
-    attributedFor(conversionMetricId, {
-      start: `${isoDay(priorL30Start)}T00:00:00Z`,
-      end: `${isoDay(priorL30End)}T00:00:00Z`,
-    }),
-    attributedFor(conversionMetricId, { key: "last_7_days" }),
-    attributedFor(conversionMetricId, {
-      start: `${isoDay(priorL7Start)}T00:00:00Z`,
-      end: `${isoDay(priorL7End)}T00:00:00Z`,
-    }),
-    attributedFor(conversionMetricId, { key: "yesterday" }),
-    attributedFor(conversionMetricId, {
-      start: `${isoDay(ydayWeekAgo)}T00:00:00Z`,
-      end: `${isoDay(ydayWeekAgoEnd)}T00:00:00Z`,
-    }),
-    attributedFor(conversionMetricId, { key: "this_month" }),
-    attributedFor(conversionMetricId, {
-      start: `${isoDay(priorMtdStart)}T00:00:00Z`,
-      end: `${isoDay(priorMtdSameDayEnd)}T00:00:00Z`,
-    }),
-    rangeSum(conversionMetricId, l30Start, today),
-    rangeSum(conversionMetricId, priorL30Start, priorL30End),
-    rangeSum(conversionMetricId, l7Start, today),
-    rangeSum(conversionMetricId, priorL7Start, priorL7End),
-    rangeSum(conversionMetricId, yday, ydayEnd),
-    rangeSum(conversionMetricId, ydayWeekAgo, ydayWeekAgoEnd),
-    rangeSum(conversionMetricId, mtdStart, today),
-    rangeSum(conversionMetricId, priorMtdStart, priorMtdSameDayEnd),
-  ]);
+  // Ecom aggregates — sequential via shared report queue in reporting.ts
+  const ecomL30 = await rangeSum(conversionMetricId, l30Start, today);
+  const ecomPrior30 = await rangeSum(
+    conversionMetricId,
+    priorL30Start,
+    priorL30End,
+  );
+  const ecomL7 = await rangeSum(conversionMetricId, l7Start, today);
+  const ecomPrior7 = await rangeSum(
+    conversionMetricId,
+    priorL7Start,
+    priorL7End,
+  );
+  const ecomYday = await rangeSum(conversionMetricId, yday, ydayEnd);
+  const ecomYdayPrior = await rangeSum(
+    conversionMetricId,
+    ydayWeekAgo,
+    ydayWeekAgoEnd,
+  );
+  const ecomMtd = await rangeSum(conversionMetricId, mtdStart, today);
+  const ecomPriorMtd = await rangeSum(
+    conversionMetricId,
+    priorMtdStart,
+    priorMtdSameDayEnd,
+  );
+
+  // Attributed: only L30 (+ prior) to stay within reporting rate limits
+  const l30 = await attributedFor(conversionMetricId, { key: "last_30_days" });
+  const prior30 = await attributedFor(conversionMetricId, {
+    start: `${isoDay(priorL30Start)}T00:00:00Z`,
+    end: `${isoDay(priorL30End)}T00:00:00Z`,
+  });
 
   const emailShare =
     l30.total > 0 ? Math.round((l30.email / l30.total) * 100) : 50;
@@ -208,6 +200,29 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     l30.total > 0 ? Math.round((l30.campaign / l30.total) * 100) : 50;
   const smsShare = 100 - emailShare;
   const flowShare = 100 - campaignShare;
+
+  // Keep shorter-window attributed cards from the previous plan when present
+  const keepAttr = (
+    key: keyof CustomerPlan["overview"],
+    fallbackLabel: string,
+  ): OverviewMetric => {
+    const existing = plan.overview[key];
+    if (
+      existing &&
+      typeof existing === "object" &&
+      "value" in existing &&
+      existing.value &&
+      existing.value !== "—"
+    ) {
+      return existing;
+    }
+    return {
+      label: fallbackLabel,
+      value: "—",
+      priorDeltaPct: 0,
+      yoyDeltaPct: 0,
+    };
+  };
 
   const overview: CustomerPlan["overview"] = {
     ecomL30: metric("Ecom revenue · last 30 days", ecomL30, ecomPrior30),
@@ -218,16 +233,11 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
       l30.total,
       prior30.total,
     ),
-    attributedYesterday: metric(
+    attributedYesterday: keepAttr(
+      "attributedYesterday",
       "Attributed revenue · yesterday",
-      yesterday.total,
-      ydayWeekAgoAttr.total,
     ),
-    attributedL7: metric(
-      "Attributed · last 7 days",
-      l7.total,
-      prior7.total,
-    ),
+    attributedL7: keepAttr("attributedL7", "Attributed · last 7 days"),
     emailSharePct: emailShare,
     campaignSharePct: campaignShare,
   };
@@ -236,29 +246,50 @@ export async function pullOverviewMetrics(plan: CustomerPlan): Promise<{
     window: string,
     ecom: number,
     ecomPrior: number,
-    attributed: number,
-    attrPrior: number,
+    attributed: string,
+    attrPriorPct: number,
   ): PeriodRow => ({
     window,
     ecom: formatMoney(ecom),
     ecomPriorPct: pctDelta(ecom, ecomPrior),
     ecomYoyPct: 0,
-    attributed: formatMoney(attributed),
-    attrPriorPct: pctDelta(attributed, attrPrior),
+    attributed,
+    attrPriorPct,
     attrYoyPct: 0,
   });
+
+  const priorPeriod = (window: string) =>
+    plan.periods.find((p) => p.window === window);
 
   const periods: PeriodRow[] = [
     period(
       "Yesterday",
       ecomYday,
       ecomYdayPrior,
-      yesterday.total,
-      ydayWeekAgoAttr.total,
+      priorPeriod("Yesterday")?.attributed ?? "—",
+      priorPeriod("Yesterday")?.attrPriorPct ?? 0,
     ),
-    period("Last 7 days", ecomL7, ecomPrior7, l7.total, prior7.total),
-    period("MTD", ecomMtd, ecomPriorMtd, mtd.total, priorMtd.total),
-    period("Last 30 days", ecomL30, ecomPrior30, l30.total, prior30.total),
+    period(
+      "Last 7 days",
+      ecomL7,
+      ecomPrior7,
+      priorPeriod("Last 7 days")?.attributed ?? "—",
+      priorPeriod("Last 7 days")?.attrPriorPct ?? 0,
+    ),
+    period(
+      "MTD",
+      ecomMtd,
+      ecomPriorMtd,
+      priorPeriod("MTD")?.attributed ?? "—",
+      priorPeriod("MTD")?.attrPriorPct ?? 0,
+    ),
+    period(
+      "Last 30 days",
+      ecomL30,
+      ecomPrior30,
+      formatMoney(l30.total),
+      pctDelta(l30.total, prior30.total),
+    ),
   ];
 
   for (const window of ["QTD", "Last quarter", "YTD"]) {

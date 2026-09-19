@@ -272,11 +272,18 @@ export async function exchangeAuthorizationCode(options: {
   });
   const token = await postToken(body);
   const now = Date.now();
+  const expiresInSec =
+    typeof token.expires_in === "number" && token.expires_in > 0
+      ? token.expires_in
+      : 3600;
+  if (!token.access_token) {
+    throw new Error("Klaviyo token response missing access_token");
+  }
   return {
     customerId: options.customerId,
     accessToken: token.access_token,
-    refreshToken: token.refresh_token,
-    expiresAt: now + token.expires_in * 1000,
+    refreshToken: token.refresh_token || "",
+    expiresAt: now + expiresInSec * 1000,
     scope: token.scope,
     tokenType: token.token_type,
     connectedAt: new Date(now).toISOString(),
@@ -287,17 +294,27 @@ export async function exchangeAuthorizationCode(options: {
 export async function refreshAccessToken(
   tokens: KlaviyoOAuthTokens,
 ): Promise<KlaviyoOAuthTokens> {
+  if (!tokens.refreshToken) {
+    throw new Error("Klaviyo refresh token missing — Reconnect Klaviyo");
+  }
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: tokens.refreshToken,
   });
   const token = await postToken(body);
   const now = Date.now();
+  const expiresInSec =
+    typeof token.expires_in === "number" && token.expires_in > 0
+      ? token.expires_in
+      : 3600;
+  if (!token.access_token) {
+    throw new Error("Klaviyo token refresh missing access_token");
+  }
   const next: KlaviyoOAuthTokens = {
     ...tokens,
     accessToken: token.access_token,
     refreshToken: token.refresh_token || tokens.refreshToken,
-    expiresAt: now + token.expires_in * 1000,
+    expiresAt: now + expiresInSec * 1000,
     scope: token.scope ?? tokens.scope,
     tokenType: token.token_type ?? tokens.tokenType,
     updatedAt: new Date(now).toISOString(),
@@ -311,15 +328,25 @@ export async function getValidAccessToken(
   customerId: string,
 ): Promise<string | null> {
   const tokens = await loadOAuthTokens(customerId);
-  if (!tokens) return null;
+  if (!tokens?.accessToken) return null;
   const skewMs = 60_000;
   if (tokens.expiresAt > Date.now() + skewMs) {
     return tokens.accessToken;
   }
+  if (!tokens.refreshToken) return null;
   try {
     const refreshed = await refreshAccessToken(tokens);
     return refreshed.accessToken;
-  } catch {
+  } catch (error) {
+    // Surface refresh failure on next API call path via resolveKlaviyoAuth
+    console.error(
+      "Klaviyo token refresh failed:",
+      error instanceof Error ? error.message : error,
+    );
+    // Fall back to existing access token if it might still be valid
+    if (tokens.expiresAt > Date.now()) {
+      return tokens.accessToken;
+    }
     return null;
   }
 }

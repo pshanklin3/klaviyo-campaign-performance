@@ -214,20 +214,20 @@ export async function pullExperimentMetrics(
     const bounds = windowBounds(normalized.changedOn, pull.benchmarkDays);
     const windows = describeMetricWindows(normalized);
 
-    const [benchmarkStats, currentStats] = await Promise.all([
-      statsForWindow(
+    const [benchmarkStats, currentStats] = [
+      await statsForWindow(
         normalized,
         bounds.benchmarkStart,
         bounds.benchmarkEnd,
         conversionMetricId,
       ),
-      statsForWindow(
+      await statsForWindow(
         normalized,
         bounds.currentStart,
         bounds.currentEnd,
         conversionMetricId,
       ),
-    ]);
+    ];
 
     const preset = pull.preset === "custom" ? "click_rate" : pull.preset;
     // For custom labels that look like revenue/click, infer from goal label
