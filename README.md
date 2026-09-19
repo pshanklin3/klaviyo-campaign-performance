@@ -21,7 +21,7 @@ Customer-facing account health (Performance + Success plan). Edit fields **on th
 
 ## Connect Klaviyo (OAuth)
 
-1. Create/configure the OAuth app in Klaviyo (**Manage apps**) — already done for Drake Dashboard.
+1. Create/configure the OAuth app in Klaviyo (**Manage apps**) — already done for **Dashboard**.
 2. On Vercel → **Environment Variables** (Secret), add:
    - `KLAVIYO_CLIENT_ID` — from the OAuth app
    - `KLAVIYO_CLIENT_SECRET` — generate/copy once if needed

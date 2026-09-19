@@ -6,7 +6,7 @@ import path from "path";
 const TOKEN_URL = "https://a.klaviyo.com/oauth/token";
 const AUTHORIZE_URL = "https://www.klaviyo.com/oauth/authorize";
 
-/** Scopes matching the Drake Dashboard OAuth app. */
+/** Scopes matching the Dashboard OAuth app. */
 export const KLAVIYO_OAUTH_SCOPES = [
   "accounts:read",
   "metrics:read",
